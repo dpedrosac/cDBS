@@ -1,0 +1,30 @@
+---
+folders:
+  dicom: /media/storage/cDBS/data/DICOM
+  nifti: /media/storage/cDBS/data/NIFTI
+  path2itksnap: /usr/lib/snap-3.6.0
+  path2slicer: ''
+  prefix: subj
+  rootdir: /media/storage/cDBS/
+preprocess:
+  ANTsN4:
+    bspline-fitting: 200
+    convergence:
+    - 50
+    - 50
+    - 50
+    - 50
+    dimensionality: 3
+    dti_prefix: ep2d
+    prefix: bc_
+    shrink-factor: 4
+    threshold: 1.0e-07
+  dcm2nii:
+    BIDSsidecar: 'yes'
+    IncludeFiles: T1_,T2_,ep2d_,CT*H30
+    NameConflicts: 2
+    OutputCompression: 'no'
+    OutputFileStruct: '%p_%d'
+    ReorientCrop: 'no'
+    Verbosity: 1
+  metdata: patients.xlsx
