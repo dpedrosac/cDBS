@@ -1,0 +1,12 @@
+temp/
+data/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+Documentation
+/site

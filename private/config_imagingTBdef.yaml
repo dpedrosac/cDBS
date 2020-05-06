@@ -1,0 +1,34 @@
+# Config file saving all important settings that have been set; A recovery to default mode is possible
+%YAML 1.1
+
+---
+folders:
+  rootdir: ''
+  dicom: ''
+  nifti: ''
+  path2slicer: ''
+  path2itksnap: ''
+  prefix: subj
+preprocess:
+  dcm2nii:
+      BIDSsidecar: 'yes'
+      OutputCompression: 'no'
+      OutputFileStruct: '%p_%d'
+      NameConflicts: 2
+      Verbosity: 1
+      IncludeFiles: "T1_,T2_,ep2d_,CT*H30"
+      ReorientCrop: 'no'
+  ANTsN4:
+      prefix: 'bc_'
+      dimensionality: 3
+      shrink-factor: 4
+      bspline-fitting: 200
+      convergence:
+        - 50
+        - 50
+        - 50
+        - 50
+      threshold: 1e-7
+      dti_prefix: 'ep2d'
+
+  metdata: "patients.xlsx"
