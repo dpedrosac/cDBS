@@ -16,7 +16,9 @@ version = "0.1.0"
 setup(
     name='analysis-myoDBS',
     version=version,
-    description='Analyses of MyoDBS data',
+    description='This projects intends to provide a toolbox for analysing iamging data from patients receiving DBS '
+                'electrodes. Particularly, the preoperative MRI scans and postoperative CT scans are used to visualise'
+                'the location of the electrodes.',
     # TODO, add: long_description='long_description',  # Optional
     url='https://github.com/dpedrosac/analysis-myoDVS',
     classifiers=[

@@ -10,3 +10,4 @@ webcolors
 matplotlib
 Pillow
 nibabel
+yaml

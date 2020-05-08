@@ -5,7 +5,7 @@ import os
 import sys
 
 import yaml
-from PyQt5 import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
+from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QMainWindow, QTabWidget, QListWidget, QAbstractItemView
 
 import utils.HelperFunctions as HF
@@ -32,7 +32,7 @@ class ImagingToolboxMain(QMainWindow):
 class TabContent(QWidget):
     """creates the different tabs which correspond to the modules which are needed to process data"""
     
-    def __init__(self, parent, debug=False, _rootdir="/media/storage/analysis-myoDBS/ImagingToolbox/"):
+    def __init__(self, parent, debug=False, _rootdir="/media/storage/cDBS/"):
         super(QWidget, self).__init__(parent)
         self.selected_subj_Gen = ''
         self.selected_subj_ANT = ''
@@ -345,6 +345,7 @@ class TabContent(QWidget):
 
         #image_filename.append("d:/analysis-myoDBS/data/NIFTI/subj1/t2_spc_FoV256_1iso_12ch_t2_spc_FoV256_1iso_12ch.nii")
         HF.LittleHelpers.load_imageviewer(viewer, image_folder)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

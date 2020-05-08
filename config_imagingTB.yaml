@@ -21,7 +21,7 @@ preprocess:
     threshold: 1.0e-07
   dcm2nii:
     BIDSsidecar: 'yes'
-    IncludeFiles: T1_,T2_,ep2d_,CT*H30
+    IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
     NameConflicts: 2
     OutputCompression: 'no'
     OutputFileStruct: '%p_%d'

@@ -8,7 +8,7 @@ import sys
 import time
 import utils.HelperFunctions as HF
 import pandas as pds
-
+import multiprocessing as mp
 
 class PreprocessDCM:
     """in this class a functions are defined which aim at extracting data from DICOM files to nifti images and for basic
@@ -48,14 +48,8 @@ class PreprocessDCM:
         self.convert_dcm2nii(subjlist, last_folder=int(lastsubj))
 
     def convert_dcm2nii(self, dicomfolders, last_folder):
-        """extracts DICOM-data and saves them to NIFTI-files to be further processed"""
-
-        mods = ['CT', 'MRT']
-        if self.logfile:
-            log_filename = os.path.join(self.cfg["folders"]["rootdir"], 'logs',
-                                        "log_DCM2NII_" + time.strftime("%Y%m%d-%H%M%S"))
-        else:
-            log_filename = os.devnull
+        """extracts DICOM-data and saves them to NIFTI-files to be further processed; for this, the multiprocessing
+        toolbox is used for a use of all available cores"""
 
         subj_list_save = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
         if not os.path.isfile(subj_list_save):
@@ -63,86 +57,114 @@ class PreprocessDCM:
         else:
             df_save = pds.read_csv(subj_list_save, sep='\t')
 
+        data_new = {'name': [], 'folder': []}
+        for idx, name in enumerate(dicomfolders, start=last_folder+1):
+            data_new['name'].append(name)
+            data_new['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
+
+        df_new = pds.DataFrame(data_new, columns=['name', 'folder'])
+        df_save.append(df_new)
+        df_save.reset_index(drop=True)
+
         print('\nExtracting DICOM files for {} subject(s)'.format(len(dicomfolders)))
-        HF.LittleHelpers.printProgressBar(0, len(dicomfolders) * len(mods), prefix='Progress:', suffix='Complete',
-                                          length=50, decimals=1)
-        idx = 0
-        start_time_complete = time.time()
-        for k, name in enumerate(dicomfolders, start=last_folder + 1):
-            start_time_subject = time.time()
-            data_temp = {'name' : name, 'folder': self.cfg["folders"]["prefix"] + str(k)}
-            df_save = df_save.append(data_temp, ignore_index=True)
+        start_multi = time.time()
+        processes = [mp.Process(target=self.dcm2niix_multiprocessing,
+                                args=(name, ind, self.get_dcm2niix(self.DCM2NIIX_ROOT)))
+                     for ind, name in enumerate(dicomfolders, start=last_folder + 1)]
 
-            dcm2niix_bin = self.get_dcm2niix(self.DCM2NIIX_ROOT)
-            subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(k))
-            if not os.path.isdir(subj_outdir):
-                os.mkdir(subj_outdir)
+        for p in processes:
+            p.start()
 
-            keptfiles, deletedfiles = ([] for i in range(2))
-            for m in mods:
-                idx += 1
-                input_folder_name = os.path.join(self.inputdir, name + m)
-                input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and "100" in f.path)]
-                if type(input_folder_files) == list:
-                    input_folder_files = ''.join(input_folder_files)
+        for p in processes:
+            p.join()
 
-                orig_stdout = sys.stdout
-                sys.stdout = open(log_filename, 'w')
-                subprocess.call([dcm2niix_bin,
-                                 '-b', self.cfg["preprocess"]["dcm2nii"]["BIDSsidecar"][0],
-                                 '-z', self.cfg["preprocess"]["dcm2nii"]["OutputCompression"][0],
-                                 '-f', self.cfg["preprocess"]["dcm2nii"]["OutputFileStruct"],
-                                 '-o', subj_outdir,
-                                 '-w', str(self.cfg["preprocess"]["dcm2nii"]["NameConflicts"]),
-                                 '-v', str(self.cfg["preprocess"]["dcm2nii"]["Verbosity"]),
-                                 '-x', str(self.cfg["preprocess"]["dcm2nii"]["ReorientCrop"]),
-                                 input_folder_files],
-                                stdout=sys.stdout, stderr=subprocess.STDOUT)
-                sys.stdout.close()
-                sys.stdout = orig_stdout
-                HF.LittleHelpers.printProgressBar(idx, len(dicomfolders) * len(mods), prefix='Progress:',
-                                                  suffix='Complete', length=50, decimals=1)
-                files_kept, files_deleted = self.select_sequences(subj_outdir)
-                keptfiles.extend(files_kept)
-                deletedfiles.extend(files_deleted)
-
-            # Functions creating/updating pipeline log, which document individually all steps along with settings
-            log_text = "{} files successfully converted: {}, \n\nand {} deleted: {}.\nDuration: {:.2f} secs" \
-                .format(len(set(keptfiles)),
-                        '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(keptfiles)))),
-                        len(set(deletedfiles)),
-                        '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(deletedfiles)))),
-                        time.time() - start_time_subject)
-            HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
-                                             subject=data_temp["folder"], module='dcm2nii',
-                                             opt=self.cfg["preprocess"]["dcm2nii"], project="")
-
-        df_save.to_csv(subj_list_save, index=False, header=True, sep='\t')
+        df_save.to_csv(subj_list_save, index=True, header=True, sep='\t')
         print('\nIn total, a list of {} subjects was created'.format(len(dicomfolders)))
-        print('\nData extraction took {:.2f}secs.'.format(time.time() - start_time_complete), end='', flush=True)
+        print('\nData extraction took {:.2f}secs.'.format(time.time() - start_multi), end='', flush=True)
         print()
+
+    def dcm2niix_multiprocessing(self, name, no_subj, dcm2niix_bin):
+        """this function is intended to provide a multiprocessing approach to speed up extration of DICOM data to nifti
+        files"""
+
+        # general settings for the extraction to work and log data
+        modalities = ['CT', 'MRI']
+        if self.logfile:
+            log_filename = os.path.join(self.cfg["folders"]["rootdir"], 'logs',
+                                        "log_DCM2NII_" + time.strftime("%Y%m%d-%H%M%S"))
+        else:
+            log_filename = os.devnull
+
+        subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj))
+        res = {'name': name, 'folder': self.cfg["folders"]["prefix"] + str(no_subj)}
+        qout.put(res)
+
+        if not os.path.isdir(subj_outdir):
+            os.mkdir(subj_outdir)
+        start_time_subject = time.time()
+        keptfiles, deletedfiles = ([] for i in range(2))
+
+        for mod in modalities:
+            input_folder_name = os.path.join(self.inputdir, name + mod)
+            input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and "100" in f.path)]
+            if type(input_folder_files) == list:
+                input_folder_files = ''.join(input_folder_files)
+
+            orig_stdout = sys.stdout
+            sys.stdout = open(log_filename, 'w')
+            subprocess.call([dcm2niix_bin,
+                             '-b', self.cfg["preprocess"]["dcm2nii"]["BIDSsidecar"][0],
+                             '-z', self.cfg["preprocess"]["dcm2nii"]["OutputCompression"][0],
+                             '-f', self.cfg["preprocess"]["dcm2nii"]["OutputFileStruct"],
+                             '-o', subj_outdir,
+                             '-w', str(self.cfg["preprocess"]["dcm2nii"]["NameConflicts"]),
+                             '-v', str(self.cfg["preprocess"]["dcm2nii"]["Verbosity"]),
+                             '-x', str(self.cfg["preprocess"]["dcm2nii"]["ReorientCrop"]),
+                             input_folder_files],
+                            stdout=sys.stdout, stderr=subprocess.STDOUT)
+            sys.stdout.close()
+            sys.stdout = orig_stdout
+
+            files_kept, files_deleted = self.select_sequences(subj_outdir)
+            keptfiles.extend(files_kept)
+            deletedfiles.extend(files_deleted)
+
+        # Functions creating/updating pipeline log, which document individually all steps along with settings
+        log_text = "{} files successfully converted: {}, \n\nand {} deleted: {}.\nDuration: {:.2f} secs" \
+            .format(len(set(keptfiles)),
+                    '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(keptfiles)))),
+                    len(set(deletedfiles)),
+                    '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(deletedfiles)))),
+                    time.time() - start_time_subject)
+        HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
+                                         subject=self.cfg["folders"]["prefix"] + str(no_subj), module='dcm2nii',
+                                         opt=self.cfg["preprocess"]["dcm2nii"], project="")
 
     def select_sequences(self, subj_outdir):
         """Function enabling user to select only some sequences; this is particularly helpful when a stack of files
         is extracted from DICOM-data"""
         import glob
-        import itertools
 
-        list_sequences = self.cfg["preprocess"]["dcm2nii"]["IncludeFiles"].split(",")
-        if not list_sequences:
-            return
-        else:
-            keeplist_temp = []
-            keeplist_temp.extend([glob.glob(os.path.join(subj_outdir, '*' + x.lower() + '*'))
-                                  for x in list_sequences]) # for generalisability, upper-/lowercase tested sequentially
-            keeplist_temp.extend([glob.glob(os.path.join(subj_outdir, '*' + x.upper() + '*'))
-                                  for x in list_sequences])
-            keeplist = list(itertools.chain.from_iterable(keeplist_temp))
-            keeplist = [array for array in keeplist if ("SCOUT" not in array and "REFORMATION" not in array)]
-            allfiles = glob.glob(os.path.join(subj_outdir, '*'))
-            files_to_delete = list(set(allfiles) - set(keeplist))
-            [os.remove(x) for x in files_to_delete]
+        allsequences = glob.glob(os.path.join(subj_outdir, '*'))
+        regex_complete = self.cfg["preprocess"]["dcm2nii"]["IncludeFiles"].split(",")
+        regex_complete += ['~SCOUT', '~AAH', '~REFORMATION']
 
+        r = re.compile(r"^~.*")
+        excluded_sequences = [x[1:] for x in list(filter(r.match, regex_complete))]
+        included_sequences = [x for x in list(filter(re.compile(r"^(?!~).*").match, regex_complete))]
+
+        if not included_sequences:
+            included_sequences = ['.']
+
+        keeplist, black_list = [], []
+        [keeplist.append(x) for x in glob.glob(os.path.join(subj_outdir, '*')) for y in included_sequences
+         if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
+        [black_list.append(x) for x in keeplist for y in excluded_sequences
+         if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
+        keeplist = list(set(keeplist) - set(black_list))
+        files_to_delete = list(set(allsequences) - set(keeplist))
+
+        [os.remove(x) for x in files_to_delete]
         return keeplist, files_to_delete
 
     @staticmethod

@@ -36,7 +36,8 @@ def saveDirButton():
 def includeFilesDCM2NII():
     text = "Here, a list of sequences can be defined which are kept after DICOM files are transformed. The idea " \
            "is that all 'localizers' and sequences of no interest are deleted, to mantain the list of files " \
-           "uncluttered; However, by leaving it blank all files are kept, e.g. to see which sequences are available"
+           "uncluttered; However, by leaving it blank all files are kept, e.g. to see which sequences are available; " \
+           "sequences to be excluded can be defined using a '~' in front of the string to search for"
     return HF.LittleHelpers.split_lines(text)
 
 
