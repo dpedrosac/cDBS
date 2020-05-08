@@ -10,6 +10,7 @@ import utils.HelperFunctions as HF
 import pandas as pds
 import multiprocessing as mp
 
+
 class PreprocessDCM:
     """in this class a functions are defined which aim at extracting data from DICOM files to nifti images and for basic
     work on these"""
@@ -97,7 +98,6 @@ class PreprocessDCM:
 
         subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj))
         res = {'name': name, 'folder': self.cfg["folders"]["prefix"] + str(no_subj)}
-        qout.put(res)
 
         if not os.path.isdir(subj_outdir):
             os.mkdir(subj_outdir)
