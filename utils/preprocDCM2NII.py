@@ -46,9 +46,9 @@ class PreprocessDCM:
             self.outdir = self.cfg["folders"]["nifti"]
 
         lastsubj = self.get_index_nifti_folders(self.outdir, prefix=self.cfg["folders"]["prefix"])
-        self.convert_dcm2nii(subjlist, last_folder=int(lastsubj))
+        self.convert_dcm2nii(subjlist, last_idx=int(lastsubj))
 
-    def convert_dcm2nii(self, dicomfolders, last_folder):
+    def convert_dcm2nii(self, dicomfolders, last_idx):
         """extracts DICOM-data and saves them to NIFTI-files to be further processed; for this, the multiprocessing
         toolbox is used for a use of all available cores"""
 
@@ -59,7 +59,7 @@ class PreprocessDCM:
             df_save = pds.read_csv(subj_list_save, sep='\t')
 
         data_new = {'name': [], 'folder': []}
-        for idx, name in enumerate(dicomfolders, start=last_folder+1):
+        for idx, name in enumerate(dicomfolders, start=last_idx + 1):
             data_new['name'].append(name)
             data_new['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
 
@@ -69,12 +69,20 @@ class PreprocessDCM:
 
         print('\nExtracting DICOM files for {} subject(s)'.format(len(dicomfolders)))
         start_multi = time.time()
+        status = mp.Queue()
+        #        for k in range(mp.cpu_count()):
         processes = [mp.Process(target=self.dcm2niix_multiprocessing,
-                                args=(name, ind, self.get_dcm2niix(self.DCM2NIIX_ROOT)))
-                     for ind, name in enumerate(dicomfolders, start=last_folder + 1)]
-
+                                args=(name, ind, self.get_dcm2niix(self.DCM2NIIX_ROOT), last_idx,
+                                      len(dicomfolders), status)) for ind, name in enumerate(dicomfolders, start=1)]
         for p in processes:
             p.start()
+
+        while any([p.is_alive() for p in processes]):
+            while not status.empty():
+                subj_name, modality, no_subj, total_subj = status.get()
+                print("Extracting DICOM-folders ({}) for subj{}: {} (subject {}/{})"
+                      .format(modality, no_subj, subj_name, no_subj, total_subj))
+            time.sleep(0.1)
 
         for p in processes:
             p.join()
@@ -84,7 +92,7 @@ class PreprocessDCM:
         print('\nData extraction took {:.2f}secs.'.format(time.time() - start_multi), end='', flush=True)
         print()
 
-    def dcm2niix_multiprocessing(self, name, no_subj, dcm2niix_bin):
+    def dcm2niix_multiprocessing(self, name_subj, no_subj, dcm2niix_bin, last_idx, total_subj, status):
         """this function is intended to provide a multiprocessing approach to speed up extration of DICOM data to nifti
         files"""
 
@@ -96,8 +104,7 @@ class PreprocessDCM:
         else:
             log_filename = os.devnull
 
-        subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj))
-        res = {'name': name, 'folder': self.cfg["folders"]["prefix"] + str(no_subj)}
+        subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj + last_idx))
 
         if not os.path.isdir(subj_outdir):
             os.mkdir(subj_outdir)
@@ -105,7 +112,8 @@ class PreprocessDCM:
         keptfiles, deletedfiles = ([] for i in range(2))
 
         for mod in modalities:
-            input_folder_name = os.path.join(self.inputdir, name + mod)
+            status.put((name_subj, mod, no_subj, total_subj))
+            input_folder_name = os.path.join(self.inputdir, name_subj + mod)
             input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and "100" in f.path)]
             if type(input_folder_files) == list:
                 input_folder_files = ''.join(input_folder_files)
@@ -140,6 +148,10 @@ class PreprocessDCM:
                                          subject=self.cfg["folders"]["prefix"] + str(no_subj), module='dcm2nii',
                                          opt=self.cfg["preprocess"]["dcm2nii"], project="")
 
+    @staticmethod
+    def backline():
+        print('\r', end='')
+
     def select_sequences(self, subj_outdir):
         """Function enabling user to select only some sequences; this is particularly helpful when a stack of files
         is extracted from DICOM-data"""
@@ -159,8 +171,10 @@ class PreprocessDCM:
         keeplist, black_list = [], []
         [keeplist.append(x) for x in glob.glob(os.path.join(subj_outdir, '*')) for y in included_sequences
          if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
+
         [black_list.append(x) for x in keeplist for y in excluded_sequences
          if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
+
         keeplist = list(set(keeplist) - set(black_list))
         files_to_delete = list(set(allsequences) - set(keeplist))
 

@@ -6,7 +6,6 @@ import os
 import warnings
 import sys
 import re
-import glob
 import subprocess
 from PyQt5.QtWidgets import QMessageBox
 
@@ -55,8 +54,8 @@ class LittleHelpers:
             # this part creates the first part of the logging routine, i.e. something like a header
             outfile = open(logfile, 'w+')
             hdr = "="*130 + "\nAnalysis pipeline for " + project +" project.\n\nThis file summarises the steps taken " \
-                            "so that at the end, all preprocessing steps and options can be reproduced\n \nLog-File " \
-                            "for: \t\t{}\n \n".format(subject) + "="*130
+                                                                  "so that at the end, all preprocessing steps and options can be reproduced\n \nLog-File " \
+                                                                  "for: \t\t{}\n \n".format(subject) + "="*130
             outfile.write(LittleHelpers.split_lines(hdr))
             outfile.close()
 
@@ -67,7 +66,7 @@ class LittleHelpers:
                 string_opt = ''.join("{:<20s}:{}\n".format("None"))
 
             output = "\nRunning {} for subj {} with the following options:\n" \
-                              "\n{}\n".format(module, subject, string_opt) + "-"*130
+                     "\n{}\n".format(module, subject, string_opt) + "-"*130
             outfile.write("\n" + LittleHelpers.split_lines(output))
             outfile.write("\n\n" + text + "\n")
 
@@ -103,10 +102,10 @@ class LittleHelpers:
                            explicit_start=True, allow_unicode=True, encoding='utf-8')
 
     @staticmethod
-    def load_imageviewer(path2viewer, imagefolder, suffix=''):
+    def load_imageviewer(path2viewer, file_names, suffix=''):
         """loads NIFTI-files to pathviewer"""
 
-        file_names = glob.glob(os.path.join(imagefolder, '*.nii'))
+        #file_names = glob.glob(os.path.join(imagefolder, '*.nii'))
 
         if not file_names:
             txt = "There are no NIFTI-files in this folder ({}), please double-check".format(imagefolder)
@@ -126,25 +125,35 @@ class LittleHelpers:
         elif sys.platform == 'macos':
             LittleHelpers.msg_box(text="Could not be tested yet!!!", title="Mac unavailable so far")
 
-        if ('ITK-SNAP' in path2viewer or 'snap' in path2viewer):
-            subprocess.call(cmd)
+        if 'ITK-SNAP' in path2viewer or 'snap' in path2viewer:
+
+            p = subprocess.Popen(cmd, shell=False,
+                                 stdin=subprocess.PIPE,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.PIPE)
+            stdoutdata, stderrdata = p.communicate()
+            flag = p.returncode
+            if flag != 0:
+                print(stderrdata)
+
         else:
             LittleHelpers.msg_box(text="Viewers other than ITK-SNAP are not implemented!",
                                   title="Unknown viewer")
 
-    @staticmethod
-    def msg_box(text='Unknown text', title='unknown title', flag='Information'):
-        """helper intended to provide some sort of message box with a text and a title"""
-        msgBox = QMessageBox()
-        if flag == 'Information':
-            msgBox.setIcon(QMessageBox.Information)
-        elif flag == 'Warning':
-            msgBox.setIcon(QMessageBox.Warning)
-        else:
-            msgBox.setIcon(QMessageBox.Critical)
 
-        msgBox.setText(text)
-        msgBox.setWindowTitle(title)
-        msgBox.setStandardButtons(QMessageBox.Ok)
-        msgBox.exec()
+@staticmethod
+def msg_box(text='Unknown text', title='unknown title', flag='Information'):
+    """helper intended to provide some sort of message box with a text and a title"""
+    msgBox = QMessageBox()
+    if flag == 'Information':
+        msgBox.setIcon(QMessageBox.Information)
+    elif flag == 'Warning':
+        msgBox.setIcon(QMessageBox.Warning)
+    else:
+        msgBox.setIcon(QMessageBox.Critical)
+
+    msgBox.setText(text)
+    msgBox.setWindowTitle(title)
+    msgBox.setStandardButtons(QMessageBox.Ok)
+    msgBox.exec()
 

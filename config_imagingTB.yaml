@@ -14,11 +14,21 @@ preprocess:
     - 50
     - 50
     - 50
-    dimensionality: 3
+    denoise: 'no'
     dti_prefix: ep2d
     prefix: bc_
     shrink-factor: 4
     threshold: 1.0e-07
+  Registration:
+    denoise: 'no'
+    dimensionality_coregister: 3
+    dimensionality_denoise: 3
+    resample_method: '0'
+    resample_spacing: '0.7'
+    use-histogram-matching: true
+    winsorize-imageintensities:
+    - 0.005
+    - 0.005
   dcm2nii:
     BIDSsidecar: 'yes'
     IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha

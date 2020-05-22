@@ -1,5 +1,7 @@
 temp/
 data/
+logs/
+tests/
 
 # Environments
 .env

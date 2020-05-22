@@ -27,9 +27,26 @@ def subjectDetails():
 
 # GUIdcm2nii
 def saveDirButton():
-    text = "The DICOM folder is saved into a configuration file, which is read when GUI is loaded in order to " \
-           "facilitate continuing with previuos session (file located in main folder of Toolbox)"
+    text = "The folder is saved into a configuration file, which is read when GUI is loaded in order to " \
+           "facilitate continuing with previous session (file located in main folder of Toolbox). Only available " \
+           "for some parts of the code"
     return HF.LittleHelpers.split_lines(text)
+
+
+def run_dcm2niix():
+    text = "Before running this script, please make sure that the prefrences are set properly. moreover it is " \
+           "recommended to name DICOM folders xxxCT and xxxMRI or one of both. cDBS will specifically look for these " \
+           "folders to convert DICOM data from."
+
+    return HF.LittleHelpers.split_lines(text)
+
+
+def run_processing(input_string='something happens'):
+    text = "By pressing the button {}. Please make sure, thta not too many folders/items are selected as this may " \
+           "produce performance problems in your machine".format(input_string)
+
+    return HF.LittleHelpers.split_lines(text)
+
 
 
 # SettingsDCM2NII
@@ -117,13 +134,31 @@ def LabelReorientCrop():
 
 # SettingsNIFTIprocAnts
 def LabelPrefixBias():
-    text = "The prefix for the file resulting from bias correction. This may be necessary for debugging purposes"
+    text = "The prefix for the N4Bias-corrected files. Be cautious here as changing this may result in some parts of the toolbox not working"
 
     return HF.LittleHelpers.split_lines(text)
 
 
 def LabelShrink():
-    text = "To lessen computation time, input images may be resampled. Shrink factor, specified as single " \
-           "integers, describe this resampling (factors <= 4 commonly used)."
+    text = "Downsample level applied, specified as integer (factors <= 4 commonly used, see https://manpages.ubuntu.com/manpages/trusty/man1/N4BiasFieldCorrection.1.html)."
 
+    return HF.LittleHelpers.split_lines(text)
+
+
+def BSplineDistance():
+    text = "B-spline fitting parameters. With respect to the official documentation, only sizing of the mesh " \
+           "elements can be used, whereas the other possible options are left as default. A float value of " \
+           "the distance between the knots defining the B-Spline mesh can be chosen"
+
+    return HF.LittleHelpers.split_lines(text)
+
+
+def LabelResampleImages():
+    text = "Defines the spacing to which imaging will be resampled at. If set to '0' resampling is skipped"
+
+    return HF.LittleHelpers.split_lines(text)
+
+
+def ResampleMethod():
+    text = "Defines the method appled for resampling images: \n\t - (lin) - linear\n\t - (nn) - nearest neighbour\n\t - (gauss) - gaussian \n\t - (bspline) - B-spline interpolation"
     return HF.LittleHelpers.split_lines(text)

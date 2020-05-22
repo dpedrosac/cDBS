@@ -15,6 +15,8 @@ class GuiSettingsDCM2NII(QWidget):
     """ This is a rather simple helper GUI, which aims at setting the options for Chris Rordens dcm2nii routines to
     convert DICOM files/folders to NIFTI"""
 
+    # TODO the Tooltips are really obnoxious so far! Is there no elegant way for the rootdir definition?
+
     def __init__(self, parent=None):
         super(QWidget, self).__init__(parent=None)
         # Load configuration files and general settings

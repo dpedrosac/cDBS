@@ -84,9 +84,9 @@ class TabContent(QWidget):
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.ActionsTab1 = QGroupBox("Functions")
         self.HBoxLowerLeftTab1 = QVBoxLayout(self.ActionsTab1)
-        self.btn_demographics = QPushButton('Subject details')
-        self.btn_demographics.setToolTip(setToolTips.subjectDetails())
-        self.btn_demographics.clicked.connect(self.openDetails)
+        self.btn_subj_details = QPushButton('Subject details')
+        self.btn_subj_details.setToolTip(setToolTips.subjectDetails())
+        self.btn_subj_details.clicked.connect(self.openDetails)
 
         self.btn_dcm2nii = QPushButton('Dcm2niix')
         self.btn_dcm2nii.setToolTip(setToolTips.runDCM2NII())
@@ -100,7 +100,7 @@ class TabContent(QWidget):
         self.btn_renaming.setToolTip(setToolTips.renameFolders())
         self.btn_renaming.clicked.connect(self.run_rename_folders)
 
-        self.HBoxLowerLeftTab1.addWidget(self.btn_demographics)
+        self.HBoxLowerLeftTab1.addWidget(self.btn_subj_details)
         self.HBoxLowerLeftTab1.addWidget(self.btn_dcm2nii)
         self.HBoxLowerLeftTab1.addWidget(self.btn_viewer)
         self.HBoxLowerLeftTab1.addWidget(self.btn_renaming)
@@ -111,7 +111,8 @@ class TabContent(QWidget):
         self.availableNiftiTab1 = QListWidget()
         self.availableNiftiTab1.setSelectionMode(QAbstractItemView.ExtendedSelection)
         itemsTab1 = self.read_subjlist(self.niftidir, prefix=self.cfg["folders"]["prefix"])
-        self.availableNiftiTab1.clicked.connect(self.change_list_item)
+#        self.availableNiftiTab1.clicked.connect(self.change_list_item)
+        self.availableNiftiTab1.itemSelectionChanged.connect(self.change_list_item)
         # self.availableNiftiTab1.currentItemChanged.connect(self.change_list_item)
         self.add_available_items(self.availableNiftiTab1, itemsTab1)
         self.HBoxUpperRightTab1.addWidget(self.availableNiftiTab1)
@@ -174,7 +175,9 @@ class TabContent(QWidget):
         self.availableNiftiTab2.setSelectionMode(QAbstractItemView.ExtendedSelection)
         itemsTab2 = self.read_subjlist(self.niftidir, prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab2, itemsTab2, msg='no')
-        self.availableNiftiTab2.clicked.connect(self.change_list_item)
+        #self.availableNiftiTab2.clicked.connect(self.change_list_item)
+        self.availableNiftiTab2.itemSelectionChanged.connect(self.change_list_item)
+
         self.HBoxUpperRightTab2.addWidget(self.availableNiftiTab2)
 
         # Combine all Boxes for Tab 2 Layout
@@ -238,14 +241,13 @@ class TabContent(QWidget):
                                           "(For this option, numerous folders are possible for batch processing)",
                                      title="No subject selected")
         else:
-            msg = "Are you sure you want to process all NIFTI-files in the following folders:\n" \
-                  "{}".format(''.join('- {}\n'.format(c) for c in sorted(self.selected_subj_ANT)))
+            msg = "Are you sure you want to process all NIFTI-files in the following folders:\n\n" \
+                  "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
                 ANTspy.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
-        #self.convertFiles = MainGUIDCM2NII()
-        #self.convertFiles.show()
+
 
     @staticmethod   # TODO move this to helper functions???
     def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
@@ -274,6 +276,8 @@ class TabContent(QWidget):
             if buttonReply == QMessageBox.Yes:
                 self.change_wdir()
         else:
+            items = list(items)
+            items.sort(key=lambda fname: int(fname.split(self.cfg["folders"]["prefix"])[1]))
             sending_list.addItems(items)
 
     def change_list_item(self):
@@ -329,7 +333,6 @@ class TabContent(QWidget):
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_Gen[0])
 
-
         viewer = 'itk-snap' # to-date, only one viewer is available. May be changed in a future
         if not self.cfg["folders"]["path2itksnap"]:
             self.cfg["folders"]["path2itksnap"] = \
@@ -343,8 +346,12 @@ class TabContent(QWidget):
         #        self.cfg["path2slicer"] = self.path2viwewer
         #    path2viewer = self.cfg["path2slicer"]
 
-        #image_filename.append("d:/analysis-myoDBS/data/NIFTI/subj1/t2_spc_FoV256_1iso_12ch_t2_spc_FoV256_1iso_12ch.nii")
-        HF.LittleHelpers.load_imageviewer(viewer, image_folder)
+        # TODO code for image viewer was changed so that instead of a folder the images are needed as input (list)
+        print("Code need s to be updated. Stopping here!!")
+        #HF.LittleHelpers.load_imageviewer(viewer, image_folder)
+
+    def closeEvent(self, event):
+        event.accept()
 
 
 if __name__ == "__main__":
