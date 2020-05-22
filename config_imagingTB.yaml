@@ -10,10 +10,10 @@ preprocess:
   ANTsN4:
     bspline-fitting: 200
     convergence:
-    - 50
-    - 50
-    - 50
-    - 50
+    - 100
+    - 100
+    - 100
+    - 100
     denoise: 'no'
     dti_prefix: ep2d
     prefix: bc_

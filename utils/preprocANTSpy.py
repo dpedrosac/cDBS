@@ -123,7 +123,7 @@ class ProcessANTSpy:
                                                           shrink_factor=
                                                           self.cfg["preprocess"]["ANTsN4"]["shrink-factor"],
                                                           convergence=
-                                                          {'iters': self.cfg["preprocess"]["ANTsN4"]["convergence"],
+                                                          {'iters': self.cfg["preprocess"]["ANTsN4"]["convergence"], # it may be necessary to adapt this according to the number of shrinkage factors
                                                            'tol': self.cfg["preprocess"]["ANTsN4"]["threshold"]},
                                                           spline_param=
                                                           self.cfg["preprocess"]["ANTsN4"]["bspline-fitting"],

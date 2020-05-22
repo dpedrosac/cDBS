@@ -161,4 +161,17 @@ def LabelResampleImages():
 
 def ResampleMethod():
     text = "Defines the method appled for resampling images: \n\t - (lin) - linear\n\t - (nn) - nearest neighbour\n\t - (gauss) - gaussian \n\t - (bspline) - B-spline interpolation"
+
     return HF.LittleHelpers.split_lines(text)
+
+def N4BiasConvergence():
+    text = "Maximum number of iterations for each shrinkage factor and convergence tolerance"
+
+    return HF.LittleHelpers.split_lines(text)
+
+
+def DiffPrefix():
+    text = "Prefix for diffusion weighted imaging sequences (if available)."
+
+    return HF.LittleHelpers.split_lines(text)
+

@@ -23,7 +23,7 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg = HF.LittleHelpers.load_config(rootdir)
 
         # General appearance of the GUI
-        self.setFixedSize(900, 600)
+        self.setFixedSize(800, 600)
         self.setWindowTitle('Settings for working with NIFTI files and ANTS Toolbox')
         self.show()
 
@@ -85,9 +85,9 @@ class GuiSettingsNiftiAnts(QWidget):
         lay4.addStretch()
 
         # TODO: Change labelConvergence
-        width = 46
+        width = 31.33
         self.labelConv = QLabel('Convergence?\t\t')
-        self.labelConv.setToolTip("???")
+        self.labelConv.setToolTip(setToolTips.N4BiasConvergence())
         self.lineEditConv1 = QLineEdit()
         self.lineEditConv1.setFixedWidth(width)
         self.lineEditConv2 = QLineEdit()
@@ -106,7 +106,7 @@ class GuiSettingsNiftiAnts(QWidget):
         lay5.addStretch()
 
         self.labelTolerance = QLabel('Tolerance?\t\t')
-        self.labelTolerance.setToolTip("")
+        self.labelTolerance.setToolTip(setToolTips.N4BiasConvergence())
         self.lineEditTolerance = QLineEdit()
 
         lay6 = QHBoxLayout()
@@ -115,7 +115,7 @@ class GuiSettingsNiftiAnts(QWidget):
         lay6.addStretch()
 
         self.labelDiffPrefix = QLabel('Prefix for DTI data?\t')
-        self.labelDiffPrefix.setToolTip("")
+        self.labelDiffPrefix.setToolTip(setToolTips.DiffPrefix())
         self.lineEditDiffPrefix = QLineEdit()
 
         lay7 = QHBoxLayout()
