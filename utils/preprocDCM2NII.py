@@ -9,7 +9,7 @@ import time
 import utils.HelperFunctions as HF
 import pandas as pds
 import multiprocessing as mp
-
+from dependencies import ROOTDIR
 
 class PreprocessDCM:
     """in this class a functions are defined which aim at extracting data from DICOM files to nifti images and for basic
@@ -17,15 +17,11 @@ class PreprocessDCM:
 
     def __init__(self, _folderlist):
         self.logfile = True
-        rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-        self.cfg = HF.LittleHelpers.load_config(rootdir)
-        self.DCM2NIIX_ROOT = os.path.join(self.cfg["folders"]["rootdir"], 'ext', 'dcm2niix')
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.DCM2NIIX_ROOT = os.path.join(ROOTDIR, 'ext', 'dcm2niix')
 
         if not os.path.isdir(self.cfg["folders"]["dicom"]):
-            text = "Please indicate a correct folder in the main GUI"
-            title = "Wrong folder!"
-            HF.LittleHelpers.msg_box(text=text, title=title)
+            HF.msg_box(text="Please indicate a correct folder in the main GUI", title="Woring folder")
         else:
             self.inputdir = self.cfg["folders"]["dicom"]
 
@@ -52,25 +48,11 @@ class PreprocessDCM:
         """extracts DICOM-data and saves them to NIFTI-files to be further processed; for this, the multiprocessing
         toolbox is used for a use of all available cores"""
 
-        subj_list_save = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
-        if not os.path.isfile(subj_list_save):
-            df_save = pds.DataFrame(columns=['name', 'folder'])
-        else:
-            df_save = pds.read_csv(subj_list_save, sep='\t')
-
-        data_new = {'name': [], 'folder': []}
-        for idx, name in enumerate(dicomfolders, start=last_idx + 1):
-            data_new['name'].append(name)
-            data_new['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
-
-        df_new = pds.DataFrame(data_new, columns=['name', 'folder'])
-        df_save.append(df_new)
-        df_save.reset_index(drop=True)
-
         print('\nExtracting DICOM files for {} subject(s)'.format(len(dicomfolders)))
         start_multi = time.time()
+
+        # this is the old method of using multiprocessing ressources; not used anymore as less effective
         status = mp.Queue()
-        #        for k in range(mp.cpu_count()):
         processes = [mp.Process(target=self.dcm2niix_multiprocessing,
                                 args=(name, ind, self.get_dcm2niix(self.DCM2NIIX_ROOT), last_idx,
                                       len(dicomfolders), status)) for ind, name in enumerate(dicomfolders, start=1)]
@@ -87,7 +69,6 @@ class PreprocessDCM:
         for p in processes:
             p.join()
 
-        df_save.to_csv(subj_list_save, index=True, header=True, sep='\t')
         print('\nIn total, a list of {} subjects was created'.format(len(dicomfolders)))
         print('\nData extraction took {:.2f}secs.'.format(time.time() - start_multi), end='', flush=True)
         print()
@@ -148,6 +129,32 @@ class PreprocessDCM:
                                          subject=self.cfg["folders"]["prefix"] + str(no_subj), module='dcm2nii',
                                          opt=self.cfg["preprocess"]["dcm2nii"], project="")
 
+    def create_csv_subjlist(self, dicomfolders, last_idx):
+        """ this function creates a csv-files which aims at providing information about which name/pseudnonym, etc.
+         corresponds to the respective subject in the NIFTI-folders
+
+        :param dicomfolders: directory with original DICOM folders
+        :param last_idx: index of last subject that has already been transformed, so that data can be processed in
+                        several steps
+        :return: none, saves a csv-file in the directory in which folder with NIFTI files are stored
+        """
+
+        subj_list_save = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
+        if not os.path.isfile(subj_list_save):
+            df_save = pds.DataFrame(columns=['name', 'folder'])
+        else:
+            df_save = pds.read_csv(subj_list_save, sep='\t')
+
+        data_new = {'name': [], 'folder': []}
+        for idx, name in enumerate(dicomfolders, start=last_idx + 1):
+            data_new['name'].append(name)
+            data_new['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
+
+        df_new = pds.DataFrame(data_new, columns=['name', 'folder'])
+        df_save.append(df_new)
+        df_save.reset_index(drop=True)
+        df_save.to_csv(subj_list_save, index=True, header=True, sep='\t')
+
     @staticmethod
     def backline():
         print('\r', end='')
@@ -201,7 +208,10 @@ class PreprocessDCM:
     @staticmethod
     def create_subjlist(folderlist):
         """creates a set of subjects; Especially, different modalities are summarised as one but only if filenames are
-        identical"""
+        identical; the extraction of DICOM is somehow different to the rest of the lists because of possibly many
+        folders for one subject, so that a separate function is required instead of the one in the HelperFunction
+        class """
+
         allnames = [re.findall("[a-z][^A-Z]*", x) for x in folderlist]
         available_subj = set(x for letters in allnames for x in letters)
 

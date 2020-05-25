@@ -5,13 +5,10 @@
 patients"""
 
 from setuptools import setup, find_packages
-from setuptools.command import build_ext
 import os
-import sys
 
-setup_py_dir = os.path.dirname(os.path.realpath(__file__))
+ROOTDIR = os.path.dirname(os.path.realpath(__file__))
 version = "0.1.0"
-
 
 setup(
     name='analysis-myoDBS',
@@ -46,6 +43,6 @@ setup(
         'Bug Reports': 'https://github.com/dpedrosac/ImagingToolbox/issues',
         'Funding': 'https://donate.pypi.org',
         'Say Thanks!': '',
-        'Source': 'https://github.com/dpedrosac/ImagingToolbox/',
+        'Source': 'https://github.com/dpedrosac/cDBS/',
         },
 )

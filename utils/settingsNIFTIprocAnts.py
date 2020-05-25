@@ -9,7 +9,7 @@ import private.allToolTips as setToolTips
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, \
     QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox
-
+from dependencies import ROOTDIR
 
 class GuiSettingsNiftiAnts(QWidget):
     """ Helper GUI, which enables to change the settings of the different steps with the ANts Toolbox to analyse NIFTI
@@ -19,8 +19,7 @@ class GuiSettingsNiftiAnts(QWidget):
         super(QWidget, self).__init__(parent=None)
 
         # Load configuration files and general settings
-        rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-        self.cfg = HF.LittleHelpers.load_config(rootdir)
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
 
         # General appearance of the GUI
         self.setFixedSize(800, 600)
@@ -137,14 +136,23 @@ class GuiSettingsNiftiAnts(QWidget):
         self.settings_list2 = QVBoxLayout(self.optionboxRegistration)
         self.settings_list2.addLayout(lay1)
 
+        self.labelPrefixRegistration = QLabel('Output prefix?\t\t')
+        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        self.lineEditPrefixRegistration = QLineEdit()
+
+        lay8 = QHBoxLayout()
+        lay8.addWidget(self.labelPrefixRegistration)
+        lay8.addWidget(self.lineEditPrefixRegistration)
+        lay8.addStretch()
+
         self.labelResampleSpacing = QLabel('Resample Spacing?\t')
         self.labelResampleSpacing.setToolTip(setToolTips.LabelResampleImages())
         self.lineResampleSpacing = QLineEdit()
 
-        lay8 = QHBoxLayout()
-        lay8.addWidget(self.labelResampleSpacing)
-        lay8.addWidget(self.lineResampleSpacing)
-        lay8.addStretch()
+        lay9 = QHBoxLayout()
+        lay9.addWidget(self.labelResampleSpacing)
+        lay9.addWidget(self.lineResampleSpacing)
+        lay9.addStretch()
 
         self.labelResampleMethod = QLabel('Resampling method?\t')
         self.labelResampleMethod.setToolTip(setToolTips.ResampleMethod())
@@ -166,16 +174,68 @@ class GuiSettingsNiftiAnts(QWidget):
         self.btngroup_ResampleMethod.addButton(self.rbtnResample3)
         self.btngroup_ResampleMethod.addButton(self.rbtnResample4)
 
-        lay9 = QHBoxLayout()
-        lay9.addWidget(self.labelResampleMethod)
-        lay9.addWidget(self.rbtnResample0)
-        lay9.addWidget(self.rbtnResample1)
-        lay9.addWidget(self.rbtnResample2)
-        lay9.addWidget(self.rbtnResample3)
-        lay9.addWidget(self.rbtnResample4)
+        lay10 = QHBoxLayout()
+        lay10.addWidget(self.labelResampleMethod)
+        lay10.addWidget(self.rbtnResample0)
+        lay10.addWidget(self.rbtnResample1)
+        lay10.addWidget(self.rbtnResample2)
+        lay10.addWidget(self.rbtnResample3)
+        lay10.addWidget(self.rbtnResample4)
+
+        self.labelApplyTransformation = QLabel('Apply transformation?\t\t')
+        #        self.labelPrefix.setToolTip(setToolTips.LabelPrefixBias())
+        self.btngroup_ApplyTransformation = QButtonGroup()
+        self.rbtnApplyTransformationy = QRadioButton('yes')
+        self.rbtnApplyTransformationn = QRadioButton('no')
+        self.rbtnApplyTransformationy.toggled.connect(self.onClickedRBTN_ApplyTransformation)
+        self.rbtnApplyTransformationn.toggled.connect(self.onClickedRBTN_ApplyTransformation)
+
+        self.btngroup_ApplyTransformation.addButton(self.rbtnApplyTransformationy)
+        self.btngroup_ApplyTransformation.addButton(self.rbtnApplyTransformationn)
+        lay11 = QHBoxLayout()
+        lay11.addWidget(self.labelApplyTransformation)
+        lay11.addWidget(self.rbtnApplyTransformationy)
+        lay11.addWidget(self.rbtnApplyTransformationn)
+        lay11.addStretch()
+
+        # TODO: Change labelConvergence
+        width = 45
+        self.labelmaxIter = QLabel('Maximum number\n of iterations per level?\t\t')
+        self.labelmaxIter.setToolTip(setToolTips.N4BiasConvergence())
+        self.lineEditmaxIter1 = QLineEdit()
+        self.lineEditmaxIter1.setFixedWidth(width)
+        self.lineEditmaxIter2 = QLineEdit()
+        self.lineEditmaxIter2.setFixedWidth(width)
+        self.lineEditmaxIter3 = QLineEdit()
+        self.lineEditmaxIter3.setFixedWidth(width)
+        self.lineEditmaxIter4 = QLineEdit()
+        self.lineEditmaxIter4.setFixedWidth(width)
+
+        lay12 = QHBoxLayout()
+        lay12.addWidget(self.labelmaxIter)
+        lay12.addWidget(self.lineEditmaxIter1)
+        lay12.addWidget(self.lineEditmaxIter2)
+        lay12.addWidget(self.lineEditmaxIter3)
+        lay12.addWidget(self.lineEditmaxIter4)
+        lay12.addStretch()
+
+        self.labelThresholdRegistration = QLabel('Threshold for registration?\t\t')
+        #self.labelTolerance.setToolTip(setToolTips.N4BiasConvergence())
+        self.lineEditThresholdRegistration = QLineEdit()
+
+        lay13 = QHBoxLayout()
+        lay13.addWidget(self.labelThresholdRegistration)
+        lay13.addWidget(self.lineEditThresholdRegistration)
+        lay13.addStretch()
 
         self.settings_list2.addLayout(lay8)
+        self.settings_list2.addStretch(1)
         self.settings_list2.addLayout(lay9)
+        self.settings_list2.addLayout(lay10)
+        self.settings_list2.addStretch(1)
+        self.settings_list2.addLayout(lay11)
+        self.settings_list2.addLayout(lay12)
+        self.settings_list2.addStretch(10)
 
         # Merge all upper boxes
         self.layout_upper = QHBoxLayout()
@@ -229,7 +289,6 @@ class GuiSettingsNiftiAnts(QWidget):
             else:
                 self.rbtnResample0.setChecked(True)
 
-#            self.lineEditDenoise.setText(self.cfg["preprocess"]["ANTsN4"]["denoise"])
             self.lineEditShrink.setText(str(self.cfg["preprocess"]["ANTsN4"]["shrink-factor"]))
             self.lineEditBSplineDist.setText(str(self.cfg["preprocess"]["ANTsN4"]["bspline-fitting"]))
             self.lineEditConv1.setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][0]))
@@ -240,8 +299,15 @@ class GuiSettingsNiftiAnts(QWidget):
             self.lineEditDiffPrefix.setText(str(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]))
 
             # Right side, i.e. Registration
-            self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["Registration"]["resample_spacing"]))
 
+            self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["Registration"]["prefix"])
+            self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["Registration"]["resample_spacing"]))
+            self.lineEditmaxIter1.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][0]))
+            self.lineEditmaxIter2.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][1]))
+            self.lineEditmaxIter3.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][2]))
+            self.lineEditmaxIter4.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][3]))
+            self.lineEditThresholdRegistration.setText(str(self.cfg["preprocess"]["Registration"]
+                                                           ["threshold_registration"]))
 
     def closeEvent(self, event):
         """saves the settings found here as a yaml file which may be loaded the next time as the configuration used"""
@@ -256,9 +322,16 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg["preprocess"]["ANTsN4"]["threshold"] = float(self.lineEditTolerance.text())
         self.cfg["preprocess"]["ANTsN4"]["dti_prefix"] = self.lineEditDiffPrefix.text()
 
+        self.cfg["preprocess"]["Registration"]["prefix"] = self.lineEditPrefixRegistration.text()
         self.cfg["preprocess"]["Registration"]["resample_spacing"] = self.lineResampleSpacing.text()
+        self.cfg["preprocess"]["Registration"]["max_iterations"][0] = int(self.lineEditmaxIter1.text())
+        self.cfg["preprocess"]["Registration"]["max_iterations"][1] = int(self.lineEditmaxIter2.text())
+        self.cfg["preprocess"]["Registration"]["max_iterations"][2] = int(self.lineEditmaxIter3.text())
+        self.cfg["preprocess"]["Registration"]["max_iterations"][3] = int(self.lineEditmaxIter4.text())
+        self.cfg["preprocess"]["Registration"]["threshold_registration"] = \
+            float(self.lineEditThresholdRegistration.text())
 
-        HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
+        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
         event.accept()
 
     def load_default_settings(self):
@@ -267,8 +340,7 @@ class GuiSettingsNiftiAnts(QWidget):
         ret = QMessageBox.question(self, 'MessageBox', "Do you really want to restore default settings for ANTs?",
                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if ret == QMessageBox.Yes:
-            rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-            with open(os.path.join(rootdir, 'private/') + 'config_imagingTBdef.yaml', 'r') as cfg:
+            with open(os.path.join(ROOTDIR, 'private/') + 'config_imagingTBdef.yaml', 'r') as cfg:
                 cfg_temp = yaml.safe_load(cfg)
                 self.cfg["preprocess"]["ANTsN4"] = cfg_temp["preprocess"]["ANTsN4"]
                 self.cfg["preprocess"]["Registration"] = cfg_temp["preprocess"]["Registration"]
@@ -292,6 +364,12 @@ class GuiSettingsNiftiAnts(QWidget):
         radioBtn = self.sender()
         radioBtn.isChecked()
         self.cfg["preprocess"]["Registration"]["resample_method"] = self.sender().text()
+
+    @QtCore.pyqtSlot()
+    def onClickedRBTN_ApplyTransformation(self):
+        radioBtn = self.sender()
+        radioBtn.isChecked()
+        self.cfg["preprocess"]["Registration"]["apply_transformation"] = self.sender().text()
 
 
 

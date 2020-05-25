@@ -31,6 +31,7 @@ preprocess:
       threshold: 1e-7
       dti_prefix: 'ep2d'
   Registration:
+      prefix: 'reg_'
       resample_spacing: 0.7
       resample_method: 2
       dimensionality_coregister: 3
@@ -40,6 +41,13 @@ preprocess:
         - .005
         - .005
       dimensionality_denoise: 3
+      apply_transformation: no
+      max_iterations:
+        - 1000
+        - 500
+        - 250
+        - 100
+      threshold_registration: 1e-6
 
 
   metdata: "patients.xlsx"

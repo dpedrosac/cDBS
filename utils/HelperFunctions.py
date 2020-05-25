@@ -141,7 +141,8 @@ class LittleHelpers:
                                   title="Unknown viewer")
 
 
-@staticmethod
+# General functions: message box, find (sub-)folders in a directory,
+
 def msg_box(text='Unknown text', title='unknown title', flag='Information'):
     """helper intended to provide some sort of message box with a text and a title"""
     msgBox = QMessageBox()
@@ -157,3 +158,28 @@ def msg_box(text='Unknown text', title='unknown title', flag='Information'):
     msgBox.setStandardButtons(QMessageBox.Ok)
     msgBox.exec()
 
+
+def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
+    """takes folder and lists all available subjects in this folder according to some filter given as [prefix]"""
+
+    list_all = [name for name in os.listdir(inputdir)
+                if (os.path.isdir(os.path.join(inputdir, name)) and prefix in name)]
+
+    if list_all == '':
+        list_subj = 'No available subjects, please make sure {}-files are present and correct ' \
+                    '"prefix" is given'.format(files2lookfor)
+    else:
+        #list_subj = [x.split("_")[0] for x in list_all]
+        list_subj = set(list_all)
+
+    return list_subj
+
+
+def get_filelist_as_dict(inputdir, subjects):
+    """create a list of all available files in a folder and returns this list"""
+
+    allfiles = []
+    [allfiles.extend(list(zip(glob.glob(inputdir, x + "/*")), [x] * len(glob.glob(inoputdir, x + "/*"))))
+     for x in subjects]
+
+    return allfiles

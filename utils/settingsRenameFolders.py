@@ -15,15 +15,13 @@ class RenameFolderNames(QWidget):
     """ This is a GUI to provide the information necessary to change the name of the folders in the NIFTI directory,
     e.g. from subjx to DBS"""
 
-    def __init__(self, parent=None):
-        super(QWidget, self).__init__(parent=None)
+    def __init__(self, ROOTDIR, parent=None):
+        super(QWidget, self).__init__(parent)
         self.setFixedSize(600, 250)
         self.setWindowTitle("Batch convert subjects' folder names")
         self.show()
 
-        rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-        self.cfg = HF.LittleHelpers.load_config(rootdir)
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
         if os.path.isdir(self.cfg["folders"]["nifti"]):
             self.niftidir = self.cfg["folders"]["nifti"]
         else:
