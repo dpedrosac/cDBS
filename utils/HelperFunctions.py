@@ -8,7 +8,7 @@ import sys
 import re
 import subprocess
 from PyQt5.QtWidgets import QMessageBox
-
+import private.CheckDefaultFolders as LocationCheck
 
 class LittleHelpers:
     def __init__(self, _debug=False):
@@ -103,17 +103,16 @@ class LittleHelpers:
 
     @staticmethod
     def load_imageviewer(path2viewer, file_names, suffix=''):
-        """loads NIFTI-files to pathviewer"""
+        """loads selected NIFTI-files in imageviewer"""
 
         #file_names = glob.glob(os.path.join(imagefolder, '*.nii'))
 
         if not file_names:
-            txt = "There are no NIFTI-files in this folder ({}), please double-check".format(imagefolder)
-            title = "No NIFTI-files available"
-            LittleHelpers.msg_box(txt, title)
+            LittleHelpers.msg_box(txt="The provided list with NIFTI-files is empty, please double-check",
+                                  title="No NIFTI-files provided")
             return
 
-        #TODO: implement a way to get single files read on winxx platforms as well.
+        # TODO: implement a way to get single files read on winxx platforms as well.
 
         if sys.platform == ('win32' or 'win64'):
             cmd = [path2viewer + '/ITK-SNAP.exe -g {0} -o '.format(file_names[0]) + ' '.join(file_names[1:])]
@@ -126,7 +125,6 @@ class LittleHelpers:
             LittleHelpers.msg_box(text="Could not be tested yet!!!", title="Mac unavailable so far")
 
         if 'ITK-SNAP' in path2viewer or 'snap' in path2viewer:
-
             p = subprocess.Popen(cmd, shell=False,
                                  stdin=subprocess.PIPE,
                                  stdout=subprocess.DEVNULL,
@@ -142,6 +140,18 @@ class LittleHelpers:
 
 
 # General functions: message box, find (sub-)folders in a directory,
+def set_viewer(viewer_opt):
+    """Sets the viewer_option in the configuration file"""
+    from dependencies import ROOTDIR
+
+    cfg = LittleHelpers.load_config(ROOTDIR)
+    if viewer_opt == 'itk-snap': # to-date, only one viewer is available. May be changed in a future
+        if not cfg["folders"]["path2itksnap"]:
+            cfg["folders"]["path2itksnap"] = LocationCheck.FileLocation.itk_snap_check(ROOTDIR)
+            LittleHelpers.save_config(ROOTDIR, cfg)
+
+    return cfg["folders"]["path2itksnap"]
+
 
 def msg_box(text='Unknown text', title='unknown title', flag='Information'):
     """helper intended to provide some sort of message box with a text and a title"""
@@ -177,9 +187,45 @@ def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
 
 def get_filelist_as_dict(inputdir, subjects):
     """create a list of all available files in a folder and returns this list"""
+    import glob
 
     allfiles = []
-    [allfiles.extend(list(zip(glob.glob(inputdir, x + "/*")), [x] * len(glob.glob(inoputdir, x + "/*"))))
+    [allfiles.extend(list(zip(glob.glob(inputdir, x + "/*")), [x] * len(glob.glob(inputdir, x + "/*"))))
      for x in subjects]
 
     return allfiles
+
+def display_files_in_viewer(inputdir, regex2include, regex2exclude, selected_subjects='', viewer='itk-snap'):
+    """Routine intended to provide generic way of displaying a batch of data using the viewer selected"""
+    from dependencies import ROOTDIR
+    import glob
+
+    cfg = LittleHelpers.load_config(ROOTDIR)
+
+    if not selected_subjects:
+        msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
+                   title="No subject selected")
+        return
+    elif len(selected_subjects) > 1:
+        msg_box(text="Please select only one folder to avoid loading too many images",
+                title="Too many subjects selected")
+        return
+    else:
+        image_folder = os.path.join(cfg["folders"]["nifti"], selected_subjects[0])
+
+    viewer_path = set_viewer(viewer)  # to-date, only one viewer is available. May be changed in a future
+    regex_complete = regex2include
+    regex2exclude = [''.join('~{}'.format(y)) for y in regex2exclude]
+    regex_complete += regex2exclude
+
+    r = re.compile(r"^~.*")
+    excluded_sequences = [x[1:] for x in list(filter(r.match, regex_complete))]
+    included_sequences = [x for x in list(filter(re.compile(r"^(?!~).*").match, regex_complete))]
+
+    all_files = glob.glob(image_folder + '/**/*.nii', recursive=True) # returns all available NIFTI-files in the folder including subfolders
+
+    file_IDs = []
+    [file_IDs.append(x) for x in all_files for y in included_sequences
+     if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
+
+    LittleHelpers.load_imageviewer(viewer_path, sorted(file_IDs))

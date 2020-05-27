@@ -1,27 +1,42 @@
 import utils.HelperFunctions as HF
-# GUItoolbox
 
+
+# ==============================    Tab 1 - GUITabGeneral   ==============================
+def subjectDetails():
+    text = 'Displays the subject details and the names of the subjects corresponding to the prefix'
+    return HF.LittleHelpers.split_lines(text)
 
 def runDCM2NII():
     text = 'Separate GUI to transform DICOM files using Chris Rordens routines ' \
            'see http://www.nitrc.org/projects/dcm2nii/'
     return HF.LittleHelpers.split_lines(text)
 
-
-def displayRAWdata():
+def displayFolderContent():
     text = 'Display the data available for the subj selected, to see what is present. Note: if more than one ' \
            'subject is selected an error will be dropped!'
     return HF.LittleHelpers.split_lines(text)
-
 
 def renameFolders():
     text = 'Displays a small GUI which enables to change the prefix for all folders. This new prefix is saved in ' \
            'the configuration file'
     return HF.LittleHelpers.split_lines(text)
 
+# ==============================    Tab 2 - GUITabPreprocessANTs   ==============================
+def N4BiasCorrection():
+    text = "Reduces the Bias from the MRI using the N4Bias correction method as described in N.J. Tustison, ..., and " \
+           "J.C. Gee. "'N4ITK: Improved N3 Bias Correction IEEE Transactions on Medical Imaging, ' \
+           "29(6):1310-1320, June 2010."
+    return HF.LittleHelpers.split_lines(text)
 
-def subjectDetails():
-    text = 'Displays the subject details and the names of the subjects corresponding to the prefix'
+def ANTsSettings():
+    text = "Displays a separate window in which the options for the ANTsPy routines can be modified."
+    return HF.LittleHelpers.split_lines(text)
+
+
+
+def checkN4BiasCorrectionresults():
+    text = "Displays the raw imaging before correcion, the imaging after N4-Bias correction and the difference between " \
+           "to see whether there have been any problems whatsoever"
     return HF.LittleHelpers.split_lines(text)
 
 

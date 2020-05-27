@@ -4,20 +4,12 @@
 import os
 import sys
 
-import yaml
-from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
-    QFileDialog, QPushButton, QMainWindow, QTabWidget, QListWidget, QAbstractItemView
+from PyQt5.QtWidgets import QWidget, QApplication, QVBoxLayout, QMainWindow, QTabWidget
 
 import utils.HelperFunctions as HF
-import utils.preprocANTSpy as ANTspy
 from GUI.GuiTabGeneral import GuiTabGeneral
-from GUI.GuiTabPrepreocessANTs import GuiTabPreprocessANTs
-from GUI.GUIdcm2nii import MainGuiDcm2nii
-from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
-from utils.settingsRenameFolders import RenameFolderNames
-import private.CheckDefaultFolders as LocationCheck
+from GUI.GuiTabPreprocessANTs import GuiTabPreprocessANTs
 from dependencies import ROOTDIR
-import private.allToolTips as setToolTips
 
 
 class cDBSMain(QMainWindow):
@@ -27,7 +19,7 @@ class cDBSMain(QMainWindow):
         super().__init__()
         self.setFixedSize(800, 600)
         self.setWindowTitle('Imaging processing pipeline for patients who underwent DBS surgery')
-        self.table_widget = TabContent(self, _debug)
+        self.table_widget = TabContent(self)
         self.setCentralWidget(self.table_widget)
         self.show()
 
@@ -35,7 +27,7 @@ class cDBSMain(QMainWindow):
 class TabContent(QWidget):
     """creates the different tabs which correspond to the modules which are needed to process data"""
 
-    def __init__(self, parent=None, debug=False):
+    def __init__(self, parent=None):
         super(TabContent, self).__init__()
         self.selected_subj_Gen = ''
         self.selected_subj_ANT = ''
@@ -47,7 +39,6 @@ class TabContent(QWidget):
             self.niftidir = os.getcwd()
         self.cfg["folders"]["rootdir"] = ROOTDIR
         HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
-        self.debug = debug
 
         # General layout for the tab view and initialisation of tabs
         self.layout = QVBoxLayout(self)

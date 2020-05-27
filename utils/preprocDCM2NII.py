@@ -11,6 +11,7 @@ import pandas as pds
 import multiprocessing as mp
 from dependencies import ROOTDIR
 
+
 class PreprocessDCM:
     """in this class a functions are defined which aim at extracting data from DICOM files to nifti images and for basic
     work on these"""
@@ -161,7 +162,7 @@ class PreprocessDCM:
 
     def select_sequences(self, subj_outdir):
         """Function enabling user to select only some sequences; this is particularly helpful when a stack of files
-        is extracted from DICOM-data"""
+        is extracted from DICOM-folder"""
         import glob
 
         allsequences = glob.glob(os.path.join(subj_outdir, '*'))

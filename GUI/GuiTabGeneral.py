@@ -43,14 +43,18 @@ class GuiTabGeneral(QWidget):
         # ------------------------- Upper left part (Folder)  ------------------------- #
         self.FolderboxTab = QGroupBox("Directory (NIFTI-files)")
         self.HBoxUpperLeftTab = QVBoxLayout(self.FolderboxTab)
+
         self.lblWdirTab = QLabel('wDIR: {}'.format(self.niftidir))
         self.HBoxUpperLeftTab.addWidget(self.lblWdirTab)
+
         self.btnChangeWdir = QPushButton('Change working directory')
+        self.btnChangeWdir.clicked.connect(self.change_wdir)
+
         self.btnReloadFilesTab = QPushButton('Reload files')
+        self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
+
         self.HBoxUpperLeftTab.addWidget(self.btnChangeWdir)
         self.HBoxUpperLeftTab.addWidget(self.btnReloadFilesTab)
-        self.btnChangeWdir.clicked.connect(self.change_wdir)
-        self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
 
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.ActionsTab = QGroupBox("Functions")
@@ -63,8 +67,8 @@ class GuiTabGeneral(QWidget):
         self.btn_dcm2nii.setToolTip(setToolTips.runDCM2NII())
         self.btn_dcm2nii.clicked.connect(self.run_DCM2NII)
 
-        self.btn_viewer = QPushButton('Display\nraw data')
-        self.btn_viewer.setToolTip(setToolTips.displayRAWdata())
+        self.btn_viewer = QPushButton('Display\nfolder content')
+        self.btn_viewer.setToolTip(setToolTips.displayFolderContent())
         self.btn_viewer.clicked.connect(self.view_files)
 
         self.btn_renaming = QPushButton('Rename\nfolders')
@@ -196,7 +200,7 @@ class GuiTabGeneral(QWidget):
         self.convertFolders.show()
 
     def view_files(self):
-        """this function displays the selected folder/subject in an external viewer (default:ITK-snap)"""
+        """This function displays the selected folder/subject in an external viewer (default:ITK-snap)"""
         if not self.selected_subj_Gen:
             HF.msg_box(text="No folder selected. To proceed, please indicate which subject to look for",
                                      title="No subject selected")
@@ -208,22 +212,9 @@ class GuiTabGeneral(QWidget):
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_Gen[0])
 
-        viewer = 'itk-snap' # to-date, only one viewer is available. May be changed in a future
-        if not self.cfg["folders"]["path2itksnap"]:
-            self.cfg["folders"]["path2itksnap"] = \
-                LocationCheck.FileLocation.itk_snap_check(self.cfg["folders"]["rootdir"])
-            HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-            viewer_path = self.cfg["folders"]["path2itksnap"]
-
-        #if viewer == 'slicer':
-        #    if not os.path.isdir(self.cfg["path2slicer
-        #        self.path2viwewer = QFileDialog.getExistingDirectory(self, 'Please indicate location of 3D slicer.')
-        #        self.cfg["path2slicer"] = self.path2viwewer
-        #    path2viewer = self.cfg["path2slicer"]
-
-        # TODO code for image viewer was changed so that instead of a folder the images are needed as input (list)
-        print("Code need s to be updated. Stopping here!!")
-        #HF.LittleHelpers.load_imageviewer(viewer, image_folder)
+        HF.display_files_in_viewer(image_folder, regex2include=['T1_', 'T2_'],
+                                   regex2exclude=['_T1_', '_T2_', 'bc_T1_', 'bc_T2_', 'bc_ep2d_', 'ep2d_'],
+                                   selected_subjects=self.selected_subj_Gen)
 
     def run_DCM2NII(self):
         """wrapper to start the GUI which enables to batch preprocess DICOM dolers and convert them to NIFTI files"""

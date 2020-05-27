@@ -3,7 +3,7 @@
 
 import os
 from PyQt5.QtWidgets import QFileDialog
-
+from dependencies import ROOTDIR
 
 class FileLocation:
     """in this class, the default folders for the additional toolboxes can be stored. This is optional and aims at
