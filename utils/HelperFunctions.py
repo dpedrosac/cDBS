@@ -185,12 +185,12 @@ def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
     return list_subj
 
 
-def get_filelist_as_dict(inputdir, subjects):
+def get_filelist_as_tuple(inputdir, subjects):
     """create a list of all available files in a folder and returns this list"""
     import glob
 
     allfiles = []
-    [allfiles.extend(list(zip(glob.glob(inputdir, x + "/*")), [x] * len(glob.glob(inputdir, x + "/*"))))
+    [allfiles.extend(zip(glob.glob(os.path.join(inputdir, x + "/*")), [x] * len(glob.glob(os.path.join(inputdir, x + "/*")))))
      for x in subjects]
 
     return allfiles

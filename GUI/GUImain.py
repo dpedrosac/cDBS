@@ -56,6 +56,11 @@ class TabContent(QWidget):
         self.tab2 = GuiTabPreprocessANTs()
         self.tabs.addTab(self.tab2, "Preprocess Imaging (ANTsPy)")
 
+        # ==============================    Tab 3 - Lead detection   ==============================
+        self.tab3 = GuiTabPreprocessANTs()
+        self.tabs.addTab(self.tab3, "Detect leads (Pacer)")
+
+
         # Add tabs to widget
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)

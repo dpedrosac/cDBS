@@ -14,12 +14,12 @@ import utils.preprocANTSpy as ANTspy
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
 import private.allToolTips as setToolTips
 
-class GuiTabPreprocessANTs(QWidget):
+class GuiTabDetectLeads(QWidget):
     """Tab which shows the options for preprocessing data, that is N4BiasfieldCorrection and Coregestiering of pre- and
      postoperative imaging"""
 
     def __init__(self, parent=None, ROOTDIR=''):
-        super(GuiTabPreprocessANTs, self).__init__(parent)
+        super(GuiTabDetectLeads, self).__init__(parent)
         self.selected_subj_ANT = ''
 
         # General settings/variables/helper files needed needed at some point
@@ -237,7 +237,7 @@ class GuiTabPreprocessANTs(QWidget):
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)
-    w = GuiTabPreprocessANTs()
+    w = GuiTabDetectLeads()
     w.show()
 
     sys.exit(app.exec_())

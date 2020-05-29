@@ -30,7 +30,7 @@ preprocess:
         - 50
       threshold: 1e-7
       dti_prefix: 'ep2d'
-  Registration:
+  registration:
       prefix: 'reg_'
       resample_spacing: 0.7
       resample_method: 2

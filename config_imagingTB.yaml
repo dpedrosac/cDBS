@@ -19,7 +19,16 @@ preprocess:
     prefix: bc_
     shrink-factor: 4
     threshold: 1.0e-07
-  Registration:
+  dcm2nii:
+    BIDSsidecar: 'yes'
+    IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
+    NameConflicts: 2
+    OutputCompression: 'no'
+    OutputFileStruct: '%p_%d'
+    ReorientCrop: 'no'
+    Verbosity: 1
+  metdata: patients.xlsx
+  registration:
     apply_transformation: false
     denoise: 'no'
     dimensionality_coregister: 3
@@ -37,12 +46,3 @@ preprocess:
     winsorize-imageintensities:
     - 0.005
     - 0.995
-  dcm2nii:
-    BIDSsidecar: 'yes'
-    IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
-    NameConflicts: 2
-    OutputCompression: 'no'
-    OutputFileStruct: '%p_%d'
-    ReorientCrop: 'no'
-    Verbosity: 1
-  metdata: patients.xlsx
