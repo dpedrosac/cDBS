@@ -182,51 +182,31 @@ class GuiSettingsNiftiAnts(QWidget):
         lay10.addWidget(self.rbtnResample3)
         lay10.addWidget(self.rbtnResample4)
 
-        self.labelApplyTransformation = QLabel('Apply transformation?\t\t')
+        self.labelDefaultSettings = QLabel('Default registration?\t')
         #        self.labelPrefix.setToolTip(setToolTips.LabelPrefixBias())
-        self.btngroup_ApplyTransformation = QButtonGroup()
-        self.rbtnApplyTransformationy = QRadioButton('yes')
-        self.rbtnApplyTransformationn = QRadioButton('no')
-        self.rbtnApplyTransformationy.toggled.connect(self.onClickedRBTN_ApplyTransformation)
-        self.rbtnApplyTransformationn.toggled.connect(self.onClickedRBTN_ApplyTransformation)
+        self.btngroup_DefaultSettingsRegistration = QButtonGroup()
+        self.rbtnDefaultRegistrationy = QRadioButton('yes')
+        self.rbtnDefaultRegistrationn = QRadioButton('no')
+        self.rbtnDefaultRegistrationy.toggled.connect(self.onClickedRBTN_DefaultRegistration)
+        self.rbtnDefaultRegistrationn.toggled.connect(self.onClickedRBTN_DefaultRegistration)
 
-        self.btngroup_ApplyTransformation.addButton(self.rbtnApplyTransformationy)
-        self.btngroup_ApplyTransformation.addButton(self.rbtnApplyTransformationn)
+        self.btngroup_DefaultSettingsRegistration.addButton(self.rbtnDefaultRegistrationy)
+        self.btngroup_DefaultSettingsRegistration.addButton(self.rbtnDefaultRegistrationn)
         lay11 = QHBoxLayout()
-        lay11.addWidget(self.labelApplyTransformation)
-        lay11.addWidget(self.rbtnApplyTransformationy)
-        lay11.addWidget(self.rbtnApplyTransformationn)
+        lay11.addWidget(self.labelDefaultSettings)
+        lay11.addWidget(self.rbtnDefaultRegistrationy)
+        lay11.addWidget(self.rbtnDefaultRegistrationn)
         lay11.addStretch()
 
-        # TODO: Change labelConvergence
-        width = 45
-        self.labelmaxIter = QLabel('Maximum number\n of iterations per level?\t\t')
-        self.labelmaxIter.setToolTip(setToolTips.N4BiasConvergence())
-        self.lineEditmaxIter1 = QLineEdit()
-        self.lineEditmaxIter1.setFixedWidth(width)
-        self.lineEditmaxIter2 = QLineEdit()
-        self.lineEditmaxIter2.setFixedWidth(width)
-        self.lineEditmaxIter3 = QLineEdit()
-        self.lineEditmaxIter3.setFixedWidth(width)
-        self.lineEditmaxIter4 = QLineEdit()
-        self.lineEditmaxIter4.setFixedWidth(width)
+        self.labelCustomRegistration = QLabel('Edit registration settings?\t')
+        self.PushButtonViewRegistration = QPushButton("Edit cmdline")
+        self.PushButtonViewRegistration.setDisabled(True)
+        self.PushButtonViewRegistration.clicked.connect(self.viewRegistrationCmdLine)
 
         lay12 = QHBoxLayout()
-        lay12.addWidget(self.labelmaxIter)
-        lay12.addWidget(self.lineEditmaxIter1)
-        lay12.addWidget(self.lineEditmaxIter2)
-        lay12.addWidget(self.lineEditmaxIter3)
-        lay12.addWidget(self.lineEditmaxIter4)
+        lay12.addWidget(self.labelCustomRegistration)
+        lay12.addWidget(self.PushButtonViewRegistration)
         lay12.addStretch()
-
-        self.labelThresholdRegistration = QLabel('Threshold for registration?\t\t')
-        #self.labelTolerance.setToolTip(setToolTips.N4BiasConvergence())
-        self.lineEditThresholdRegistration = QLineEdit()
-
-        lay13 = QHBoxLayout()
-        lay13.addWidget(self.labelThresholdRegistration)
-        lay13.addWidget(self.lineEditThresholdRegistration)
-        lay13.addStretch()
 
         self.settings_list2.addLayout(lay8)
         self.settings_list2.addStretch(1)
@@ -278,16 +258,19 @@ class GuiSettingsNiftiAnts(QWidget):
             else:
                 self.rbtnDenoisen.setChecked(True)
 
-            if self.cfg["preprocess"]["Registration"]["resample_method"] == 1:
+            if self.cfg["preprocess"]["registration"]["resample_method"] == 1:
                 self.rbtnResample1.setChecked(True)
-            elif self.cfg["preprocess"]["Registration"]["resample_method"] == 2:
+            elif self.cfg["preprocess"]["registration"]["resample_method"] == 2:
                 self.rbtnResample2.setChecked(True)
-            elif self.cfg["preprocess"]["Registration"]["resample_method"] == 3:
+            elif self.cfg["preprocess"]["registration"]["resample_method"] == 3:
                 self.rbtnResample3.setChecked(True)
-            elif self.cfg["preprocess"]["Registration"]["resample_method"] == 4:
+            elif self.cfg["preprocess"]["registration"]["resample_method"] == 4:
                 self.rbtnResample4.setChecked(True)
             else:
                 self.rbtnResample0.setChecked(True)
+
+            if self.cfg["preprocess"]["registration"]["default_registration"] == 'yes':
+                self.rbtnDefaultRegistrationy.setChecked(True)
 
             self.lineEditShrink.setText(str(self.cfg["preprocess"]["ANTsN4"]["shrink-factor"]))
             self.lineEditBSplineDist.setText(str(self.cfg["preprocess"]["ANTsN4"]["bspline-fitting"]))
@@ -300,14 +283,9 @@ class GuiSettingsNiftiAnts(QWidget):
 
             # Right side, i.e. Registration
 
-            self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["Registration"]["prefix"])
-            self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["Registration"]["resample_spacing"]))
-            self.lineEditmaxIter1.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][0]))
-            self.lineEditmaxIter2.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][1]))
-            self.lineEditmaxIter3.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][2]))
-            self.lineEditmaxIter4.setText(str(self.cfg["preprocess"]["Registration"]["max_iterations"][3]))
-            self.lineEditThresholdRegistration.setText(str(self.cfg["preprocess"]["Registration"]
-                                                           ["threshold_registration"]))
+            self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
+            self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
+
 
     def closeEvent(self, event):
         """saves the settings found here as a yaml file which may be loaded the next time as the configuration used"""
@@ -322,14 +300,8 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg["preprocess"]["ANTsN4"]["threshold"] = float(self.lineEditTolerance.text())
         self.cfg["preprocess"]["ANTsN4"]["dti_prefix"] = self.lineEditDiffPrefix.text()
 
-        self.cfg["preprocess"]["Registration"]["prefix"] = self.lineEditPrefixRegistration.text()
-        self.cfg["preprocess"]["Registration"]["resample_spacing"] = self.lineResampleSpacing.text()
-        self.cfg["preprocess"]["Registration"]["max_iterations"][0] = int(self.lineEditmaxIter1.text())
-        self.cfg["preprocess"]["Registration"]["max_iterations"][1] = int(self.lineEditmaxIter2.text())
-        self.cfg["preprocess"]["Registration"]["max_iterations"][2] = int(self.lineEditmaxIter3.text())
-        self.cfg["preprocess"]["Registration"]["max_iterations"][3] = int(self.lineEditmaxIter4.text())
-        self.cfg["preprocess"]["Registration"]["threshold_registration"] = \
-            float(self.lineEditThresholdRegistration.text())
+        self.cfg["preprocess"]["registration"]["prefix"] = self.lineEditPrefixRegistration.text()
+        self.cfg["preprocess"]["registration"]["resample_spacing"] = self.lineResampleSpacing.text()
 
         HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
         event.accept()
@@ -343,8 +315,21 @@ class GuiSettingsNiftiAnts(QWidget):
             with open(os.path.join(ROOTDIR, 'private/') + 'config_imagingTBdef.yaml', 'r') as cfg:
                 cfg_temp = yaml.safe_load(cfg)
                 self.cfg["preprocess"]["ANTsN4"] = cfg_temp["preprocess"]["ANTsN4"]
-                self.cfg["preprocess"]["Registration"] = cfg_temp["preprocess"]["Registration"]
+                self.cfg["preprocess"]["registration"] = cfg_temp["preprocess"]["registration"]
         self.get_settings_from_config()
+
+    @QtCore.pyqtSlot()
+    def viewRegistrationCmdLine(self):
+        """opens the CmdLine to write custom registration routines. For the correct arguments please have a look at the
+        homepage from ANTs documentation (e.g.https://github.com/ANTsX/ANTs/wiki/Anatomy-of-an-antsRegistration-call).
+        A n example of how to implement something similar can be found in the [private] directory """
+        from subprocess import Popen
+
+        if sys.platform == 'linux':
+            Popen(["gedit", os.path.join(ROOTDIR, 'utils', 'cmdline_ANTsRegistration.txt')],
+                  stdin=open(os.devnull, 'r'))
+        elif sys.platform == 'macos':
+            print('Not yet implemented!!')
 
     # In the next lines, actions are defined when rButtons are pressed; Principally, button is checked and cfg updated
     @QtCore.pyqtSlot()
@@ -363,13 +348,18 @@ class GuiSettingsNiftiAnts(QWidget):
     def onClickedRBTN_ResampleMethod(self):
         radioBtn = self.sender()
         radioBtn.isChecked()
-        self.cfg["preprocess"]["Registration"]["resample_method"] = self.sender().text()
+        self.cfg["preprocess"]["registration"]["resample_method"] = self.sender().text()
 
     @QtCore.pyqtSlot()
-    def onClickedRBTN_ApplyTransformation(self):
+    def onClickedRBTN_DefaultRegistration(self):
         radioBtn = self.sender()
         radioBtn.isChecked()
-        self.cfg["preprocess"]["Registration"]["apply_transformation"] = self.sender().text()
+        self.cfg["preprocess"]["registration"]["default_registration"] = self.sender().text()
+
+        if self.sender().text() == 'no':
+            self.PushButtonViewRegistration.setEnabled(True)
+        else:
+            self.PushButtonViewRegistration.setEnabled(False)
 
 
 

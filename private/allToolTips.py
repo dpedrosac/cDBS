@@ -32,6 +32,15 @@ def ANTsSettings():
     text = "Displays a separate window in which the options for the ANTsPy routines can be modified."
     return HF.LittleHelpers.split_lines(text)
 
+def RegisterCT2MRI():
+    text = "Runs registration of CT imaging (moving) and T1-sequence (fixed) in order to get them into same space. " \
+           "The default option (see cfg-file) constitutes three steps: a) Rigid, b) Affine registration and c) " \
+           "Symmetric image Normalisation (SyN). For details see 'SyNRA'-option at " \
+           "https://github.com/ANTsX/ANTsPy/blob/master/ants/registration/interface.py. Non-default means, that the " \
+           "command-line for running ANTsRegistration can be modified according to the file: " \
+           "cmdline_ANTsRegistration.txt in the .utils directory. Please make sure to include all terms within *...* " \
+           "into the text-file as they will be replaced."
+    return HF.LittleHelpers.split_lines(text)
 
 
 def checkN4BiasCorrectionresults():
@@ -48,10 +57,17 @@ def saveDirButton():
     return HF.LittleHelpers.split_lines(text)
 
 
+# GUItwolist_general
 def run_dcm2niix():
     text = "Before running this script, please make sure that the prefrences are set properly. moreover it is " \
            "recommended to name DICOM folders xxxCT and xxxMRI or one of both. cDBS will specifically look for these " \
            "folders to convert DICOM data from."
+
+    return HF.LittleHelpers.split_lines(text)
+
+def run_CheckRegistration():
+    text = "All nifti-files are loaded to the viewer, so that can be selected and sent to the viewer to look for the " \
+           "results"
 
     return HF.LittleHelpers.split_lines(text)
 

@@ -87,7 +87,7 @@ class GuiTabGeneral(QWidget):
         self.availableNiftiTab.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
 
-        itemsTab = HF.read_subjlist(self.niftidir, prefix=self.cfg["folders"]["prefix"])
+        itemsTab = HF.list_folders(self.niftidir, prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsTab)
         self.HBoxUpperRightTab.addWidget(self.availableNiftiTab)
 
@@ -117,7 +117,7 @@ class GuiTabGeneral(QWidget):
                            explicit_start=True, allow_unicode=True, encoding='utf-8')
 
         self.availableNiftiTab.clear()
-        itemsChanged = HF.read_subjlist(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
+        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def run_reload_files(self):
@@ -125,7 +125,7 @@ class GuiTabGeneral(QWidget):
         self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
         self.availableNiftiTab.clear()
         #self.availableNiftiTab2.clear()
-        itemsChanged = HF.read_subjlist(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
+        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
 #        itemsChanged = self.read_subjlist(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
         #self.add_available_items(self.availableNiftiTab2, itemsChanged)

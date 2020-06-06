@@ -76,7 +76,7 @@ class GuiTabPreprocessANTs(QWidget):
         self.btn_N4BiasCorr.clicked.connect(self.run_n4Bias_corr)
 
         self.btn_CTreg = QPushButton('CT-Registration')
-        # self.btn_CTreg.setToolTip(setToolTips.RegisterCT2MRI())
+        self.btn_CTreg.setToolTip(setToolTips.RegisterCT2MRI())
         self.btn_CTreg.clicked.connect(self.run_RegisterCT2MRI)
 
         self.btn_MRIreg = QPushButton('MR-Registration')
@@ -105,7 +105,7 @@ class GuiTabPreprocessANTs(QWidget):
         self.HBoxUpperRightTab = QVBoxLayout(self.listbox)
         self.availableNiftiTab = QListWidget()
         self.availableNiftiTab.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        itemsTab = HF.read_subjlist(self.niftidir, prefix=self.cfg["folders"]["prefix"])
+        itemsTab = HF.list_folders(self.niftidir, prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsTab, msg='no')
         self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
 
@@ -139,7 +139,7 @@ class GuiTabPreprocessANTs(QWidget):
                            explicit_start=True, allow_unicode=True, encoding='utf-8') # saves new folder to yaml-file
 
         self.availableNiftiTab.clear()
-        itemsChanged = HF.read_subjlist(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
+        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def change_list_item(self):
@@ -175,7 +175,7 @@ class GuiTabPreprocessANTs(QWidget):
         self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
         self.availableNiftiTab.clear()
 
-        itemsChanged = HF.read_subjlist(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
+        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     # Separate functions/GUIs that may be initialised here

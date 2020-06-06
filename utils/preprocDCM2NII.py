@@ -82,7 +82,7 @@ class PreprocessDCM:
         modalities = ['CT', 'MRI']
         if self.logfile:
             log_filename = os.path.join(self.cfg["folders"]["rootdir"], 'logs',
-                                        "log_DCM2NII_" + time.strftime("%Y%m%d-%H%M%S"))
+                                        "log_DCM2NII_" + str(no_subj + last_idx) + time.strftime("%Y%m%d-%H%M%S"))
         else:
             log_filename = os.devnull
 

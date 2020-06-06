@@ -65,7 +65,7 @@ class LittleHelpers:
             else:
                 string_opt = ''.join("{:<20s}:{}\n".format("None"))
 
-            output = "\nRunning {} for subj {} with the following options:\n" \
+            output = "\nRunning {} for {} with the following options:\n" \
                      "\n{}\n".format(module, subject, string_opt) + "-"*130
             outfile.write("\n" + LittleHelpers.split_lines(output))
             outfile.write("\n\n" + text + "\n")
@@ -168,8 +168,7 @@ def msg_box(text='Unknown text', title='unknown title', flag='Information'):
     msgBox.setStandardButtons(QMessageBox.Ok)
     msgBox.exec()
 
-
-def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
+def list_folders(inputdir, prefix='subj', files2lookfor='NIFTI'):
     """takes folder and lists all available subjects in this folder according to some filter given as [prefix]"""
 
     list_all = [name for name in os.listdir(inputdir)
@@ -184,6 +183,19 @@ def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
 
     return list_subj
 
+def list_files_in_folder(inputdir, contains='', suffix='nii', subfolders=True):
+    """returns a list of files within a folder (including subfolders"""
+    import glob
+
+    if subfolders:
+        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(os.path.join(inputdir + '/**/*.' + suffix),
+                                                                     recursive=True)]
+    else:
+        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(inputdir + '/*.' + suffix)]
+
+    filelist = [file_id for file_id in allfiles_in_folder if any(y in file_id for y in contains)]
+
+    return filelist
 
 def get_filelist_as_tuple(inputdir, subjects):
     """create a list of all available files in a folder and returns this list"""

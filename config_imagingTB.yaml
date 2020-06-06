@@ -10,10 +10,10 @@ preprocess:
   ANTsN4:
     bspline-fitting: 200
     convergence:
-    - 100
-    - 100
-    - 100
-    - 100
+    - 50
+    - 50
+    - 50
+    - 50
     denoise: 'no'
     dti_prefix: ep2d
     prefix: bc_
@@ -29,20 +29,12 @@ preprocess:
     Verbosity: 1
   metdata: patients.xlsx
   registration:
-    apply_transformation: false
-    denoise: 'no'
-    dimensionality_coregister: 3
-    dimensionality_denoise: 3
-    max_iterations:
-    - 1000
-    - 500
-    - 250
-    - 100
+    custom_registration_file: cmdline_ANTsRegistration.txt
+    default_registration: 'yes'
+    default_registration_metric: SyNRA
+    metric:
+    - mattes
+    - GC
     prefix: reg_
     resample_method: '0'
     resample_spacing: '0.7'
-    threshold_registration: 1.0e-06
-    use-histogram-matching: true
-    winsorize-imageintensities:
-    - 0.005
-    - 0.995

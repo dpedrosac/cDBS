@@ -2,6 +2,7 @@ temp/
 data/
 logs/
 tests/
+templates/
 
 # Environments
 .env
