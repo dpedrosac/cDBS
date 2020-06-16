@@ -32,11 +32,17 @@ preprocess:
       dti_prefix: 'ep2d'
   registration:
     default_registration: 'yes'
+    registration_method: 'SyNRA'
     metric:
     - mattes
     - GC
     prefix: reg_
     resample_method: '0'
     resample_spacing: '0.7'
+    custom_registration_file: 'cmdline_ANTsRegistration.txt'
+  normalisation:
+    prefix: norm_
+    template_image: mni_icbm152_nlin_asym_09b
+    sequences: 'T1_,T2_,PD_'
 
   metdata: "patients.xlsx"

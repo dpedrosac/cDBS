@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import glob
-import re
 
 import yaml
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
@@ -12,33 +10,31 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
 import utils.HelperFunctions as HF
 import utils.preprocANTSpy as ANTspy
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
+from GUI.GuiTwoLists_generic import TwoListGUI
 import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
 
+
+# TODO: rename compare_n4Bias_results as this enables to look for all kind of nii-files
 class GuiTabPreprocessANTs(QWidget):
     """Tab which shows the options for preprocessing data, that is N4BiasfieldCorrection and Coregestiering of pre- and
      postoperative imaging"""
 
-    def __init__(self, parent=None, ROOTDIR=''):
+    def __init__(self, parent=None):
         super(GuiTabPreprocessANTs, self).__init__(parent)
         self.selected_subj_ANT = ''
-
-        # General settings/variables/helper files needed needed at some point
-        if not ROOTDIR:
-            from dependencies import ROOTDIR
 
         self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
         if os.path.isdir(self.cfg["folders"]["nifti"]):
             self.niftidir = self.cfg["folders"]["nifti"]
         else:
             self.niftidir = os.getcwd()
-        self.cfg["folders"]["rootdir"] = ROOTDIR
         HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
 
         self.lay = QHBoxLayout(self)
         self.tab = QWidget()
 
         # Customize tab
-        # ==============================    Tab 2 - ANTs routines   ==============================
         self.tab.layout = QHBoxLayout()
         self.tab.setLayout(self.tab.layout)
 
@@ -57,48 +53,40 @@ class GuiTabPreprocessANTs(QWidget):
         self.HBoxUpperLeftTab.addWidget(self.btnChangeWdir)
         self.HBoxUpperLeftTab.addWidget(self.btnReloadFilesTab)
 
-        # ------------------------- Middle left part (Settings)  ------------------------- #
+        # ------------------------- Middle left part (Preferences)  ------------------------- #
         self.SettingsTabANTs = QGroupBox("Preferences")
         self.HBoxMiddleLeftTabExt = QVBoxLayout(self.SettingsTabANTs)
-
         self.btn_ANTsettings = QPushButton('ANT Settings')
         self.btn_ANTsettings.clicked.connect(self.run_ANTsPreferences)
         self.btn_ANTsettings.setToolTip(setToolTips.ANTsSettings())
-
         self.HBoxMiddleLeftTabExt.addWidget(self.btn_ANTsettings)
 
-        # ------------------------- Middle left part (Processing)  ------------------------- #
+        # ------------------------- Middle left part (ANTs routines)  ------------------------- #
         self.ActionsTabANTs = QGroupBox("ANTs routines")
         self.HBoxMiddleLeftTab = QVBoxLayout(self.ActionsTabANTs)
-
         self.btn_N4BiasCorr = QPushButton('N4BiasCorrect')
         self.btn_N4BiasCorr.setToolTip(setToolTips.N4BiasCorrection())
         self.btn_N4BiasCorr.clicked.connect(self.run_n4Bias_corr)
+
+        self.btn_MRIreg = QPushButton('MR-Registration')
+        self.btn_MRIreg.setToolTip(setToolTips.RegisterMRI2template())
+        self.btn_MRIreg.clicked.connect(self.run_RegisterMRI2template)
 
         self.btn_CTreg = QPushButton('CT-Registration')
         self.btn_CTreg.setToolTip(setToolTips.RegisterCT2MRI())
         self.btn_CTreg.clicked.connect(self.run_RegisterCT2MRI)
 
-        self.btn_MRIreg = QPushButton('MR-Registration')
-        self.btn_MRIreg.setToolTip('???')
-
-
         self.HBoxMiddleLeftTab.addWidget(self.btn_N4BiasCorr)
-        self.HBoxMiddleLeftTab.addWidget(self.btn_CTreg)
         self.HBoxMiddleLeftTab.addWidget(self.btn_MRIreg)
+        self.HBoxMiddleLeftTab.addWidget(self.btn_CTreg)
 
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.QualityTabANTs = QGroupBox("Quality checks for ANTs preprocessing")
         self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabANTs)
-        self.btn_BiasCorrQC = QPushButton('Pre-/Post N4\nBias correction')
+        self.btn_BiasCorrQC = QPushButton('View available \nNIFTI-files in viewer')
         self.btn_BiasCorrQC.setToolTip(setToolTips.checkN4BiasCorrectionresults())
         self.btn_BiasCorrQC.clicked.connect(self.compare_n4Bias_results)
-
-        self.btn_RegQC = QPushButton('Pre-/Post \nRegistration')
-        #       self.btn_RegQC.clicked.connect(self.run_n4Bias_corr)
-
         self.HBoxLowerLeftTab.addWidget(self.btn_BiasCorrQC)
-        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
 
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
@@ -108,7 +96,6 @@ class GuiTabPreprocessANTs(QWidget):
         itemsTab = HF.list_folders(self.niftidir, prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsTab, msg='no')
         self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
-
         self.HBoxUpperRightTab.addWidget(self.availableNiftiTab)
 
         # Combine all Boxes for Tab 2 Layout
@@ -130,11 +117,11 @@ class GuiTabPreprocessANTs(QWidget):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
-        self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of nii-files')
+        self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of *.nii-files')
         self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
         self.cfg["folders"]["nifti"] = self.niftidir
-        with open(os.path.join(os.getcwd(), 'config_imagingTB.yaml'), 'wb') as settings_mod:
+        with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
             yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
                            explicit_start=True, allow_unicode=True, encoding='utf-8') # saves new folder to yaml-file
 
@@ -152,16 +139,15 @@ class GuiTabPreprocessANTs(QWidget):
 
             for i in range(len(items)):
                 self.selected_subj_ANT.append(str(self.availableNiftiTab.selectedItems()[i].text()))
-        #            print(self.selected_subj_Gen)
 
     def add_available_items(self, sending_list, items, msg='yes'):
         """adds the available subjects in the working directory into the items list;
         an error message is dropped if none available"""
 
         if len(items) == 0 and msg == 'yes':
-            buttonReply = QMessageBox.question(self, 'No files in dir', 'There are no subjects available '
-                                                                        'in the current working directory ({}). Do you want to '
-                                                                        ' change to a different one?'.format(self.niftidir),
+            buttonReply = QMessageBox.question(self, 'No files in dir', 'No subjects available in the current working '
+                                                                        'directory ({}). Do you want to change to '
+                                                                        ' a different one?'.format(self.niftidir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_wdir()
@@ -172,7 +158,7 @@ class GuiTabPreprocessANTs(QWidget):
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
-        self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
         self.availableNiftiTab.clear()
 
         itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
@@ -200,8 +186,8 @@ class GuiTabPreprocessANTs(QWidget):
         self.ANTsSettings = GuiSettingsNiftiAnts()
         self.ANTsSettings.show()
 
-    def compare_n4Bias_results(self, include_dti=False):
-        """wrapper to start comparisons between pre- and post-processed images after N4BiasCorrection"""
+    def compare_n4Bias_results(self):
+        """this function enables to select NIFTI files and e.g. compare the results obtained at this step."""
 
         if not self.selected_subj_ANT:
             HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
@@ -214,8 +200,8 @@ class GuiTabPreprocessANTs(QWidget):
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0]) # Is the index necessary
 
-        HF.display_files_in_viewer(image_folder, regex2include=['T1_', 'T2_', 'bc_T1_', 'bc_T2_'],
-                                   regex2exclude=['bc_ep2d_', 'ep2d_'], selected_subjects=self.selected_subj_ANT)
+        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
+        self.SelectFiles.show()
 
     def run_RegisterCT2MRI(self):
         """Wrapper to run the coregistration routines for the CT (moving image) to the T1-sequence of the MRI
@@ -231,7 +217,24 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT)
+                ANTspy.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT,
+                                                            input_folder=self.cfg["folders"]["nifti"])
+
+    def run_RegisterMRI2template(self):
+        """Wrapper to run the coregistration routines for the MRI (moving image) to MRI templates (fixed image)
+        specified in the config file using ANTs routines"""
+
+        if not self.selected_subj_ANT:
+            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process. "
+                            "(For this option, numerous folders are possible for batch processing)",
+                       title="No subject selected")
+        else:
+            msg = "Are you sure you want to coregister the preoperative imaging in the following folders:\n\n" \
+                  "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
+            ret = QMessageBox.question(self, 'MessageBox', msg,
+                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if ret == QMessageBox.Yes:
+                ANTspy.ProcessANTSpy().ANTsCoregisterMRI2template(subjects=self.selected_subj_ANT)
 
 
 if __name__ == '__main__':

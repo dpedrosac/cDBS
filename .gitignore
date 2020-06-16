@@ -2,7 +2,8 @@ temp/
 data/
 logs/
 tests/
-templates/
+ext/templates
+!ext/templates/mni_icbm152_nlin_asym_09b
 
 # Environments
 .env

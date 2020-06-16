@@ -53,9 +53,9 @@ class LittleHelpers:
         if not os.path.isfile(logfile):
             # this part creates the first part of the logging routine, i.e. something like a header
             outfile = open(logfile, 'w+')
-            hdr = "="*130 + "\nAnalysis pipeline for " + project +" project.\n\nThis file summarises the steps taken " \
+            hdr = "="*110 + "\nAnalysis pipeline for " + project +" project.\n\nThis file summarises the steps taken " \
                                                                   "so that at the end, all preprocessing steps and options can be reproduced\n \nLog-File " \
-                                                                  "for: \t\t{}\n \n".format(subject) + "="*130
+                                                                  "for: \t\t{}\n \n".format(subject) + "="*110
             outfile.write(LittleHelpers.split_lines(hdr))
             outfile.close()
 
@@ -66,9 +66,10 @@ class LittleHelpers:
                 string_opt = ''.join("{:<20s}:{}\n".format("None"))
 
             output = "\nRunning {} for {} with the following options:\n" \
-                     "\n{}\n".format(module, subject, string_opt) + "-"*130
+                     "\n{}\n".format(module, subject, string_opt) + "-"*110
             outfile.write("\n" + LittleHelpers.split_lines(output))
             outfile.write("\n\n" + text + "\n")
+            outfile.write("\n" + "-" * 110)
 
         outfile.close
 
@@ -138,6 +139,13 @@ class LittleHelpers:
             LittleHelpers.msg_box(text="Viewers other than ITK-SNAP are not implemented!",
                                   title="Unknown viewer")
 
+    @staticmethod
+    def create_folder(foldername):
+        """creates folder if not existent"""
+
+        if not os.path.isdir(foldername):
+                os.mkdir(foldername)
+
 
 # General functions: message box, find (sub-)folders in a directory,
 def set_viewer(viewer_opt):
@@ -183,17 +191,26 @@ def list_folders(inputdir, prefix='subj', files2lookfor='NIFTI'):
 
     return list_subj
 
-def list_files_in_folder(inputdir, contains='', suffix='nii', subfolders=True):
+def list_files_in_folder(inputdir, contains='', suffix='nii', entire_path = False, subfolders=True):
     """returns a list of files within a folder (including subfolders"""
     import glob
 
     if subfolders:
-        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(os.path.join(inputdir + '/**/*.' + suffix),
-                                                                     recursive=True)]
-    else:
-        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(inputdir + '/*.' + suffix)]
+#        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(os.path.join(inputdir + '/**/*.' + suffix),
+#                                                                     recursive=True)]
+        allfiles_in_folder = glob.glob(os.path.join(inputdir + '/**/*.' + suffix), recursive=True)
 
-    filelist = [file_id for file_id in allfiles_in_folder if any(y in file_id for y in contains)]
+    else:
+#        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(inputdir + '/*.' + suffix)]
+        allfiles_in_folder = glob.glob(inputdir + '/*.' + suffix)
+
+    if not contains:
+        filelist = [file_id for file_id in allfiles_in_folder]
+    else:
+        filelist = [file_id for file_id in allfiles_in_folder if any(y in file_id for y in contains)]
+
+    if not entire_path:
+        filelist = [os.path.split(x)[1] for x in filelist]
 
     return filelist
 
@@ -241,3 +258,29 @@ def display_files_in_viewer(inputdir, regex2include, regex2exclude, selected_sub
      if re.search(r'\w+{}.'.format(y), x, re.IGNORECASE)]
 
     LittleHelpers.load_imageviewer(viewer_path, sorted(file_IDs))
+
+def resampleANTsImaging(mm_spacing, ANTsImageObject, file_id, method):
+    """Function aiming at rescaling imaging to a resolution specified somewhere, e.g. in the cfg-file"""
+    import math
+    import ants
+
+    resolution = [mm_spacing] * 3
+    if not all([math.isclose(float(mm_spacing), x, abs_tol=10 ** -2) for x in ANTsImageObject.spacing]):
+        print('Image spacing {:.4f}x{:.4f}x{:.4f} unequal to specified value ({}mm). '
+              '\n\tRescaling {}'.format(ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
+                                        ANTsImageObject.spacing[2], mm_spacing, file_id))
+
+        if len(ANTsImageObject.spacing) == 4:
+            resolution.append(ANTsImageObject.spacing[-1])
+        elif len(ANTsImageObject.spacing) > 4:
+            msg_box(text='Sequences of >4 dimensions are not possible.', title='Too many dimensions')
+
+        resampled_image = ants.resample_image(ANTsImageObject, (resolution), use_voxels=False, interp_type=method)
+        ants.image_write(resampled_image, filename=file_id)
+    else:
+        print('Image spacing for sequence: {} is {:.4f}x{:.4f}x{:.4f} as specified in options, '
+              'proceeding'.format(file_id, ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
+                                  ANTsImageObject.spacing[2]))
+        resampled_image = ANTsImageObject
+
+    return resampled_image

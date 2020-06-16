@@ -8,7 +8,6 @@ import time
 import utils.HelperFunctions as HF
 import multiprocessing as mp
 import glob
-import math
 import sys
 import traceback
 import numpy as np
@@ -16,15 +15,16 @@ import shutil
 from itertools import groupby
 from operator import itemgetter
 from dependencies import ROOTDIR
-from PyQt5.QtWidgets import QMessageBox
 
 
+# TODO: 1. Bias correction for DTI results in enormous images, 2. second run of ANTsCoRegisterCT2MRI not working
 class ProcessANTSpy:
     """this class contains all functions used by the ANTsPy Toolbox; in general the multiprocessing routines are
     implemented aiming at making the code as efficient and quick as possible."""
 
     def __init__(self):
         self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.verbose = 0
 
     def N4BiasCorrection(self, subjects):
         """N4BiasCorrection according to N.J. Tustison, ..., and J.C. Gee.
@@ -45,122 +45,68 @@ class ProcessANTSpy:
 
         file_id_noDTI = [file_tuple for file_tuple in allfiles
                          if ('CT' not in file_tuple[0]
-                             and not self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]
-                                     in file_tuple[0]
+                             and not self.cfg["preprocess"]["ANTsN4"]["dti_prefix"] in file_tuple[0]
                              and file_tuple[0].endswith('.nii') and self.cfg["preprocess"]["ANTsN4"]["prefix"]
                              not in file_tuple[0])]
 
-        seq = ''  # Only for debugging purposes
+        seq = 'struct'  # For debugging purposes
         if not seq:
-            file_IDs = allfiles
+            fileIDs = allfiles
         elif seq == 'struct':
-            file_IDs = list(set(allfiles) - set(file_id_DTI))
+            fileIDs = list(set(allfiles) - set(file_id_DTI))
         elif seq == 'dwi':
-            file_IDs = list(set(allfiles) - set(file_id_noDTI))
+            fileIDs = list(set(allfiles) - set(file_id_noDTI))
 
         start_multi = time.time()
-        with mp.Pool(int(math.floor(mp.cpu_count() / 2))) as pool:
-            results = []
-            try:
-                results.append([pool.apply_async(func=self.N4BiasCorrection_multiprocessing,  #self.func_wrapper_debug
-                                                 args=(name_file, no_subj, os.path.join(self.cfg["folders"]["nifti"],
-                                                                                        no_subj)))
-                                for name_file, no_subj in file_IDs])
-            finally:
-                pool.close()
-                pool.join()
+        status = mp.Queue()
+        processes = [mp.Process(target=self.N4BiasCorrection_multiprocessing,
+                                args=(name_file, no_subj, os.path.join(self.cfg["folders"]["nifti"], no_subj), status))
+                     for name_file, no_subj in fileIDs]
+        for p in processes:
+            p.start()
 
-                # Functions creating/updating pipeline log, which document individually all steps along with settings
-                for no_subj in subjects:
-                    allfiles_subj = [os.path.split(files_subj)[1] for files_subj, subj_no in file_IDs if
-                                     subj_no == no_subj]
-                    log_text = "{} files successfully processed: {}, \n\n Mean Duration per subject: {:.2f} secs" \
-                        .format(len(set(allfiles_subj)),
-                                '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(allfiles_subj)))),
-                                (time.time() - start_multi) / len(subjects))
-                    HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
-                                                     subject=str(no_subj), module='N4BiasCorrection',
-                                                     opt=self.cfg["preprocess"]["ANTsN4"], project="")
+        while any([p.is_alive() for p in processes]):
+            while not status.empty():
+                try:
+                    process, no_subj, filename = status.get()
+                    print("Process: {}; Debiasing {}, filename: {}".format(process, no_subj, filename))
+                except mp.Queue.Empty:
+                    break
+            time.sleep(0.1)
 
-                print('\nIn total, a list of {} subjects was processed'.format(len(subjects)))
-                print('\nOverall, bias correction took {:.2f}secs.'.format(time.time() - start_multi))
-                print('Done!')
-
-        # debug possibility, uncomment if needed
-        #   for r in results:
-        #       r.get()
-
-    @staticmethod
-    def check_bias_correction(allfiles):
-        """function allowing to check for the difference due to correction. Specifically, """
-
-    def ANTsCoregisterCT2MRI(self, subjects, fixed_image='bc_t1'):
-        """function performing Coregistration of postoperative CT to preopertive MRI for further steps in the analysis
-         pipeline"""
-
-        print('\nStarting Coregistration for {} subject(s)'.format(len(subjects)))
-        input_folder = self.cfg["folders"]["nifti"]
-        allfiles = HF.get_filelist_as_tuple(inputdir=self.cfg["folders"]["nifti"], subjects=subjects)
-
-        regex_complete = ['CT_', '{}_'.format(fixed_image.upper())]
-        included_sequences = [x for x in list(filter(re.compile(r"^(?!~).*").match, regex_complete))]
-
-        file_ID_CT, file_ID_MRI = [], []
-        [file_ID_CT.append(x) for x in allfiles
-         if re.search(r'\w+{}.'.format(included_sequences[0]), x[0], re.IGNORECASE) and x[0].endswith('.nii')
-         and 'run' not in x[0]]
-
-        [file_ID_MRI.append(x) for x in allfiles
-         if re.search(r'\w+(?!_).({}).'.format(included_sequences[1]), x[0], re.IGNORECASE) and x[0].endswith('.nii')]
-        if not file_ID_MRI:
-            HF.msg_box(text="No MRI sequence with boas correction found. Please double-check",
-                       title="Preprocessed MRI-sequence missing")
-            return
-        fileIDs = list(self.inner_join(file_ID_CT, file_ID_MRI))
-
-        start_multi = time.time()
-        with mp.Pool(int(math.floor(mp.cpu_count() / 2))) as pool:
-            try:
-                [pool.apply_async(func=self.func_wrapper_debug,  # self.N4Bias_correction_multiprocessing
-                                  args=(filename_mri, filename_ct, no_subj,
-                                        os.path.join(self.cfg["folders"]["nifti"], no_subj)))
-                 for filename_mri, filename_ct, no_subj in fileIDs]
-            finally:
-                pool.close()
-                pool.join()
+        for p in processes:
+            p.join()
 
         # Functions creating/updating pipeline log, which document individually all steps along with settings
-        for no_subj in subjects:
-            files_processed = [(os.path.split(file_moving)[1], os.path.split(file_fixed)[1])
-                               for file_fixed, file_moving, subj_no in fileIDs if subj_no == no_subj]
-            log_text = "{} successfully registered to \n{}, \n\n Mean Duration per subject: {:.2f} " \
-                       "secs".format(files_processed[0][0], files_processed[0][1], (time.time() - start_multi) / len(subjects))
+        for subjID in subjects:
+            allfiles_subj = [os.path.split(files_subj)[1] for files_subj, subj_no in fileIDs if subj_no == subjID]
+            log_text = "{} files successfully processed: {}, \n\n Mean Duration per subject: {:.2f} secs" \
+                .format(len(set(allfiles_subj)),
+                        '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(allfiles_subj)))),
+                        (time.time() - start_multi) / len(subjects))
             HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
-                                             subject=str(no_subj), module='CT2MRIRegistration',
-                                             opt=self.cfg["preprocess"]["registration"], project="")
+                                             subject=str(subjID), module='N4BiasCorrection',
+                                             opt=self.cfg["preprocess"]["ANTsN4"], project="")
 
-        print('\nIn total, a list of {} subjects was processed'.format(len(subjects)))
-        print('\nCT registration took {:.2f}secs. overall'.format(time.time() - start_multi), end='', flush=True)
-        print()
+        print('\nIn total, a list of {} subject(s) was processed \nOverall, bias correction took '
+              '{:.1f} secs.'.format(len(subjects), time.time() - start_multi))
 
-    # ==============================    Multiprocessing functions   ==============================
-
-    def N4BiasCorrection_multiprocessing(self, filename, subj, input_folder):
+    def N4BiasCorrection_multiprocessing(self, file2rename, subj, input_folder, status):
         """Does the Bias correction taken advantage of the multicores, so that multiple subjects can be processed in
         parallel; For that a list of tuples including the entire filename and the subject to be processed are entered"""
 
+        status.put(tuple([mp.current_process().name, subj, os.path.split(file2rename)[1]]))
         filename_save = os.path.join(input_folder, self.cfg["preprocess"]["ANTsN4"]["prefix"] +
-                                     os.path.split(filename)[1])
-        print("Process: {}; Running debiasing for {}; filename: {}".format(mp.current_process().name, subj,
-                                                                           os.path.split(filename)[1]))
+                                     os.path.split(file2rename)[1])
+
         # Start with N4 Bias correction for sequences specified before
-        original_image = ants.image_read(os.path.join(input_folder, filename))
-        rescaler_nonneg = ants.contrib.RescaleIntensity(10, 100)
-        if self.cfg["preprocess"]["ANTsN4"]["denoise"] == 'yes':
+        original_image = ants.image_read(os.path.join(input_folder, file2rename))
+        rescaler_nonneg = ants.contrib.RescaleIntensity(10, 100)  # to avoid values <0 causing problems w/ log data
+        if self.cfg["preprocess"]["ANTsN4"]["denoise"] == 'yes':  # takes forever and therefore not used by default
             original_image = ants.denoise_image(image=original_image, noise_model='Rician')
 
         min_orig, max_orig = original_image.min(), original_image.max()
-        if not os.path.split(filename)[1].startswith(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]):
+        if not os.path.split(file2rename)[1].startswith(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]):
             original_image_nonneg = rescaler_nonneg.transform(original_image)
         else:
             original_image_nonneg = original_image
@@ -174,96 +120,195 @@ class ProcessANTSpy:
                                                            'tol': self.cfg["preprocess"]["ANTsN4"]["threshold"]},
                                                           spline_param=
                                                           self.cfg["preprocess"]["ANTsN4"]["bspline-fitting"],
-                                                          verbose=False, weight_mask=None)
+                                                          verbose=self.verbose, weight_mask=None)
 
-        if not os.path.split(filename)[1].startswith(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]):
+        if not os.path.split(file2rename)[1].startswith(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]):
             rescaler = ants.contrib.RescaleIntensity(min_orig, max_orig)
             bcorr_image = rescaler.transform(bcorr_image)
 
-        # Resample image
-        #        if 0 < float(self.cfg["preprocess"]["Registration"]["resample_spacing"]) != any(bcorr_image.spacing[0:2]):
-        if not all([math.isclose(float(self.cfg["preprocess"]["Registration"]["resample_spacing"]),
-                                 x, abs_tol=10 ** -2) for x in bcorr_image.spacing]):
-            bcorr_image = self.ANTrescale_image(bcorr_image,
-                                                float(self.cfg["preprocess"]["Registration"]["resample_spacing"]),
-                                                int(self.cfg["preprocess"]["Registralen(image_sequence.spacing) == 4tion"]["resample_method"]))
+        # difference between both images is saved for debugging purposes
+        diff_image = original_image - bcorr_image
+        HF.LittleHelpers.create_folder(os.path.join(input_folder, "debug"))  # only creates folder if not present
+        ants.image_write(diff_image, filename=os.path.join(input_folder, "debug", "diff_biasCorr_" +
+                                                           os.path.split(file2rename)[1]))
 
+        spacing = self.cfg["preprocess"]["registration"]["resample_spacing"]
+        bcorr_image = HF.resampleANTsImaging(mm_spacing=spacing, ANTsImageObject=bcorr_image, file_id=filename_save,
+                                             method=int(self.cfg["preprocess"]["registration"]["resample_method"]))
         ants.image_write(bcorr_image, filename=filename_save)
 
-        # Difference between both images is saved for debugging purposes
-        debug_folder = os.path.join(input_folder, "debug")
-        if not os.path.isdir(debug_folder):
-            os.mkdir(debug_folder)
+    def ANTsCoregisterMRI2template(self, subjects):
+        """function performing Coregistration between MRI and specific template"""
 
-        diff_image = original_image - bcorr_image
-        ants.image_write(diff_image,
-                         filename=os.path.join(debug_folder, "diff_biasCorr_" + os.path.split(filename)[1]))
+        print('\nStarting Coregistration for {} subject(s)'.format(len(subjects)))
+        allfiles = HF.get_filelist_as_tuple(inputdir=self.cfg["folders"]["nifti"], subjects=subjects)
+        templatefiles = glob.glob(os.path.join(ROOTDIR, 'ext', 'templates', self.cfg["preprocess"]["normalisation"]
+        ["template_image"] + '/*'))
 
-    def ANTsCoregisterCT2T1_multiprocessing(self, fixed_sequence, moving_sequence, subj, input_folder):
-        """Does the Co-Registration between twi images taking advantage of multicores, so that multiple subjects
-        can be processed in parallel; For that a list of tuples including the entire filename and the subject
-        to be processed are entered"""
+        sequences = self.cfg["preprocess"]["normalisation"]["sequences"].split(sep=',')
 
-        print("Registering {} (moving file) to {} (fixed file), using ANTsPy".format(fixed_sequence, moving_sequence))
-        previous_registrations = glob.glob(os.path.join(input_folder + "/" +
-                                                        self.cfg["preprocess"]["registration"]["prefix"] + 'run*' +
-                                                        os.path.split(moving_sequence)[1]))
-        if not previous_registrations:
+        fileIDs = []
+        for idx, seqs in enumerate(sequences):
+            file_template = [x for x in templatefiles if re.search(r'\w+.({}).'.format(seqs), x, re.IGNORECASE)] # template
+
+            regex_complete = '{}{}'.format(self.cfg["preprocess"]["ANTsN4"]["prefix"], seqs)
+
+            files_subj = [x for x in allfiles if
+                          re.search(r'\w+(?!_).({}).'.format(regex_complete), x[0], re.IGNORECASE) and x[0].endswith('.nii')
+                          and 'run' not in x[0]]
+            file_list = [(file_template[0],file_id, subj) for file_id, subj in files_subj]
+
+            fileIDs.extend(tuple(file_list))
+        print(fileIDs)
+
+        if not fileIDs:
+            HF.msg_box(text="No MRI sequence with bias correction found. Please double-check",
+                       title="Preprocessed MRI-sequence missing")
+            return
+
+        start_multi = time.time()
+        status = mp.Queue()
+        processes = [mp.Process(target=self.ANTsCoregisterMultiprocessing,
+                                args=(filename_fixed, filename_moving, no_subj,
+                                      os.path.join(self.cfg["folders"]["nifti"], no_subj), "registration", status))
+                     for filename_fixed, filename_moving, no_subj in fileIDs]
+        for p in processes:
+            p.start()
+
+        while any([p.is_alive() for p in processes]):
+            while not status.empty():
+                filename_fixed, filename_moving, no_subj = status.get()
+                print("Registering {} (f) to {} (m), using ANTsPy".format(filename_fixed, filename_moving, no_subj))
+            time.sleep(0.1)
+
+        for p in processes:
+            p.join()
+
+        # Functions creating/updating pipeline log, which document individually all steps along with settings
+        for no_subj in subjects:
+            files_processed = [(os.path.split(file_moving)[1], os.path.split(file_fixed)[1])
+                               for file_fixed, file_moving, subj_no in fileIDs if subj_no == no_subj]
+            log_text = "{} successfully normalised to \n{}, \n\n Mean Duration per subject: {:.2f} " \
+                       "secs".format(files_processed[0][0], files_processed[0][1],
+                                     (time.time() - start_multi) / len(subjects))
+            HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
+                                             subject=str(no_subj), module='MRI2templateRegistration',
+                                             opt=self.cfg["preprocess"]["normalisation"], project="")
+
+        print('\nIn total, a list of {} subjects was processed. \nCT registration took {:.2f}secs.'
+              ' overall\n'.format(len(subjects), time.time() - start_multi))
+
+    def ANTsCoregisterCT2MRI(self, subjects, input_folder, fixed_image='norm_run1_bc_t1'):
+        """Coregistration of postoperative CT to preopertive MRI for further analyses in same space; before registration
+        presence of normalised data is ensured to avoid redundancy"""
+
+        print('\nStarting Coregistration for {} subject(s)'.format(len(subjects)))
+        allfiles = HF.get_filelist_as_tuple(inputdir=input_folder, subjects=subjects)
+        self.check_for_normalisation(subjects, fixed_image='')
+
+        regex_complete = ['CT_', '{}_'.format(fixed_image.upper())]
+        included_sequences = [x for x in list(filter(re.compile(r"^(?!~).*").match, regex_complete))]
+
+        file_ID_CT, file_ID_MRI = ([] for i in range(2))
+        [file_ID_CT.append(x) for x in allfiles
+         if re.search(r'\w+{}.'.format(included_sequences[0]), x[0], re.IGNORECASE) and x[0].endswith('.nii')
+         and 'run' not in x[0]]
+
+        [file_ID_MRI.append(x) for x in allfiles # for simplicity written in a second line as regexp is slightly different
+         if re.search(r'\w+(?!_).({}).'.format(included_sequences[1]), x[0], re.IGNORECASE) and x[0].endswith('.nii')]
+
+        if not file_ID_MRI:
+            HF.msg_box(text="Bias-corrected MRI not found. Please double-check", title="Preprocessed MRI unavailable")
+            return
+        fileIDs = list(self.inner_join(file_ID_CT, file_ID_MRI))
+
+        # Start multiprocessing framework
+        start_multi = time.time()
+        status = mp.Queue()
+        processes = [mp.Process(target=self.ANTsCoregisterMultiprocessing,
+                                args=(filename_fixed, filename_moving, no_subj,
+                                      os.path.join(self.cfg["folders"]["nifti"], no_subj), "registration", status))
+                     for filename_fixed, filename_moving, no_subj in fileIDs]
+        for p in processes:
+            p.start()
+
+        while any([p.is_alive() for p in processes]):
+            while not status.empty():
+                filename_fixed, filename_moving, no_subj = status.get()
+                print("Registering {} (f) to {} (m), using ANTsPy".format(filename_fixed, filename_moving, no_subj))
+            time.sleep(0.1)
+
+        for p in processes:
+            p.join()
+
+        # Functions creating/updating pipeline log, which document individually all steps along with settings
+        for no_subj in subjects:
+            files_processed = [(os.path.split(file_moving)[1], os.path.split(file_fixed)[1])
+                               for file_fixed, file_moving, subj_no in fileIDs if subj_no == no_subj]
+            log_text = "{} successfully registered to \n{}, \n\n Mean Duration per subject: {:.2f} " \
+                       "secs".format(files_processed[0][0], files_processed[0][1],
+                                     (time.time() - start_multi) / len(subjects))
+            HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
+                                             subject=str(no_subj), module='CT2MRIRegistration',
+                                             opt=self.cfg["preprocess"]["registration"], project="")
+
+        print('\nIn total, a list of {} subjects was processed CT registration took {:.2f}secs. '
+              'overall'.format(len(subjects), time.time() - start_multi))
+
+    # ==============================    Multiprocessing functions   ==============================
+    def ANTsCoregisterMultiprocessing(self, fixed_sequence, moving_sequence, subj, input_folder, flag, status):
+        """Does the Co-Registration between two images taking advantage of multicores, so that multiple subjects
+        can be processed in parallel"""
+
+        status.put(tuple([fixed_sequence, moving_sequence, subj]))
+        if flag == "normalisation":
+            prev_reg = ''
+            files2rename = {'0GenericAffine.mat': '0GenericAffineMRI2template.mat',
+                            '1InverseWarp.nii.gz': '1InverseWarpMRI2template.nii.gz',
+                            '1Warp.nii.gz': '1WarpMRI2template.nii.gz'}
+        else:
+            prev_reg = glob.glob(os.path.join(input_folder + "/" + self.cfg["preprocess"][flag]["prefix"] + 'run*' +
+                                                            os.path.split(moving_sequence)[1]))
+            files2rename = {'0GenericAffine.mat': '0GenericAffineRegistration.mat',
+                            '1InverseWarp.nii.gz': '1InverseWarpRegistration.nii.gz',
+                            '1Warp.nii.gz': '1WarpRegistration.nii.gz'}
+
+        if not prev_reg:
             print('No previous registration found, starting with first run')
             run = 1
         else:
-            allruns = [re.search(r'\w+(run)([\d.]+)', x).group(2) for x in previous_registrations]
+            allruns = [re.search(r'\w+(run)([\d.]+)', x).group(2) for x in prev_reg]
             lastrun = int(sorted(allruns)[-1])
             filename_lastrun = os.path.join(input_folder, self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
                                             str(lastrun) + '_' + os.path.split(moving_sequence)[1])
             run = lastrun + 1
 
-        filename_save = os.path.join(input_folder, self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
+        filename_save = os.path.join(input_folder, self.cfg["preprocess"][flag]["prefix"] + 'run' +
                                      str(run) + '_' + os.path.split(moving_sequence)[1])
+
         log_filename = os.path.join(ROOTDIR, 'logs', "log_CT2MRI_RegisterANTs_{}_run_{}_".format(subj, str(run)) +
                                     time.strftime("%Y%m%d-%H%M%S") + '.txt')
 
-        print("Process: {}; Co-Registration {}; filenames: {}(f) and {}(m)".format(mp.current_process().name, subj,
-                                                                                   os.path.split(fixed_sequence)[1],
-                                                                                   os.path.split(moving_sequence)[1]))
         image_to_process = dict()
         for idx, file_id in enumerate([fixed_sequence, moving_sequence]):
-            sequence = ants.image_read(file_id)
-            spacing = float(self.cfg["preprocess"]["registration"]["resample_spacing"])
-
-            if not all ([math.isclose(float(spacing), x, abs_tol=10**-2) for x in sequence.spacing]):
-                print('Image spacing {:.4f}x{:.4f}x{:.4f} unequal to specified value ({}mm). '
-                      'Rescaling {}'.format(sequence.spacing[0], sequence.spacing[1], sequence.spacing[2],
-                                            spacing, file_id),
-                      end='', flush=True)
-                image_to_process[idx] = self.ANTrescale_image(sequence, spacing,
-                                                              int(self.cfg["preprocess"]["registration"]
-                                                                  ["resample_method"]))
-                ants.image_write(image_to_process[idx], filename=file_id)
-                print(' ... Done!')
-            else:
-                image_to_process[idx] = sequence
-                print('Image spacing for sequence: {} is {:.4f}x{:.4f}x{:.4f} as specified in options. '
-                      'Continuing!'.format(file_id, sequence.spacing[0],sequence.spacing[1],sequence.spacing[2]))
-
+            sequence = ants.image_read(file_id) # load data and resample images if necessary
+            spacing = self.cfg["preprocess"]["registration"]["resample_spacing"]
+            image_to_process[idx] = HF.resampleANTsImaging(mm_spacing=spacing,
+                                                           ANTsImageObject=sequence, file_id=file_id,
+                                                           method=int(self.cfg["preprocess"]["registration"]
+                                                                      ["resample_method"]))
         skull_strip = 0
         if skull_strip:
-            print('Implementation still required!') # TODO: implement the brain extraction routine from ANTsPyNET
+            print('Implementation still required!')  # TODO: implement the brain extraction routine from ANTsPyNET
 
-        # Start with Co-Registration of CT and T1 imaging
         fixed_sequence_filename = fixed_sequence
         if run == 1:
             moving_sequence_filename = moving_sequence
-            metric = 'mattes'
-
-        elif run == 6:
-            HF.msg_box(text="If registration fails after five times, different approach may be necessary!",
-                       title="Registration failed too many times")
-            return
-
-        else:
+            metric = self.cfg["preprocess"]["registration"]["metric"][0]
+        else: #TODO this part is not working whatsoever; requires some debugging. Returning to GuiMain",
             moving_sequence_filename = filename_lastrun
-            metric = 'GC'
+            self.cfg["preprocess"]["registration"]["default_registration"] = 'no'
+            metric = self.cfg["preprocess"]["registration"]["metric"][0]
 
         if self.cfg["preprocess"]["registration"]["default_registration"] == 'yes':
             registered_images = self.default_registration(image_to_process, fixed_sequence_filename,
@@ -273,38 +318,38 @@ class ProcessANTSpy:
             registered_images = self.custom_registration(image_to_process, fixed_sequence_filename,
                                                          moving_sequence_filename, input_folder + '/', log_filename,
                                                          run)
+        for key in files2rename:
+            name_of_file = glob.glob(os.path.join(input_folder, key))
+            if name_of_file:
+                os.rename(name_of_file[0],os.path.join(input_folder, files2rename[key]))
 
         ants.image_write(registered_images['warpedmovout'], filename=filename_save)
 
-        debug_folder = os.path.join(input_folder, "debug")
-        if not os.path.isdir(debug_folder):
-            os.mkdir(debug_folder)
+        HF.LittleHelpers.create_folder(os.path.join(input_folder, "debug"))
+        #filename_save = os.path.join(input_folder, "debug", self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
+        #                             str(run) + '_' + os.path.split(moving_sequence)[1])
+        #ants.image_write(registered_images['warpedfixout'], filename=filename_save)
 
-        filename_save = os.path.join(debug_folder, self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
-                                     str(run) + '_' + os.path.split(fixed_sequence)[1])
-        ants.image_write(registered_images['warpedfixout'], filename=filename_save)
-
-        # Old versions of the file are moved to the debug-folder
+        # 'Previous registrations' are moved to debug-folder
         if run > 1:
-            filename_previous = os.path.join(input_folder, self.cfg["preprocess"]["Registration"]["prefix"] + 'run_' +
-                                             str(lastrun) + os.path.split(moving_sequence)[1])
-            filename_dest = os.path.join(debug_folder, self.cfg["preprocess"]["Registration"]["prefix"] + 'run_' +
-                                             str(lastrun) + os.path.split(moving_sequence)[1])
+            filename_previous = os.path.join(input_folder, self.cfg["preprocess"][flag]["prefix"] + 'run_' +
+                                             str(lastrun) + '_' + os.path.split(moving_sequence)[1])
+            filename_dest = os.path.join(input_folder, "debug", self.cfg["preprocess"][flag]["prefix"] + 'RUNPREV_' +
+                                         str(lastrun) + '_' + os.path.split(moving_sequence)[1])
             shutil.move(filename_previous, filename_dest)
 
-    def default_registration(self, image_to_process, sequencename1, sequencename2, inputfolder, log_filename, metric='mattes'):
+    def default_registration(self, image_to_process, sequence1, sequence2, inputfolder, log_filename, metric='mattes'):
         """runs the default version of the ANTs registration routine, that is a Rigid transformation, an affine trans-
         formation and a symmetric normalisation (SyN). Further options available using the cmdline """
 
-        #sys.stdout = open(log_filename, 'w+') # TODO: logging not working; Must be rewritten possibly using logging module?!?
-        transform = self.cfg["preprocess"]["registration"]["default_registration_metric"]
+        # sys.stdout = open(log_filename, 'w+') # TODO: logging not working; Must be rewritten possibly using logging module?!?
+        transform = self.cfg["preprocess"]["registration"]["registration_method"]
         registered_image = ants.registration(fixed=image_to_process[0], moving=image_to_process[1],
                                              type_of_transform=transform, grad_step=.1,
                                              aff_metric=metric,
                                              outprefix=inputfolder,
-                                             initial_transform="[%s,%s,1]" % (sequencename1, sequencename2),
-                                             verbose=True)
-
+                                             initial_transform="[%s,%s,1]" % (sequence1, sequence2),
+                                             verbose=self.verbose)
         return registered_image
 
     def custom_registration(self, image_to_process, sequencename1, sequencename2, inputfolder, log_filename, runs):
@@ -332,7 +377,7 @@ class ProcessANTSpy:
         wmo_pointer = ants.utils.get_pointer_string(warpedmovout)
 
         processed_args = []
-        # TODO: add option for winsorize and for use_histogram or similar
+        # TODO: add option for winsorize and for use_histogram or similar and add custom_registration_file to settings
         with open(os.path.join(ROOTDIR, "utils",
                                self.cfg["preprocess"]["registration"]["custom_registration_file"]), "r") as f:
             for line in f:
@@ -344,14 +389,14 @@ class ProcessANTSpy:
                          ('warpedmovout_process', wmo_pointer), ('warpedfixout_process', wfo_pointer)]
 
         for item, replacement in replace_items:
-            processed_args=[re.sub(r'[*]' + item + r'[*]', replacement, x) for x in processed_args]
+            processed_args = [re.sub(r'[*]' + item + r'[*]', replacement, x) for x in processed_args]
 
-        orig_stdout = sys.stdout
-        sys.stdout = open(log_filename, 'w')
+        #orig_stdout = sys.stdout
+        #sys.stdout = open(log_filename, 'w')
         libfn = ants.utils.get_lib_fn("antsRegistration")
         libfn(processed_args)
-        sys.stdout = orig_stdout
-        sys.stdout.close()
+        #sys.stdout = orig_stdout
+        #sys.stdout.close()
 
         afffns = glob.glob(inputfolder + "*" + "[0-9]GenericAffine.mat")
         fwarpfns = glob.glob(inputfolder + "*" + "[0-9]Warp.nii.gz")
@@ -383,33 +428,44 @@ class ProcessANTSpy:
 
         return registered_image
 
-    def func_wrapper_debug(self, filename_mri, filename_ct, subj, input_folder):
-        """this is just a wrapper intended to debug the code, that is to callback possible errors"""
-        try:
-            self.ANTsCoregisterCT2T1_multiprocessing(filename_mri, filename_ct, subj, input_folder)
-            #self.N4Bias_correction_multiprocessing(filename, subj, input_folder)
-        except Exception as e:
-            raise Exception("".join(traceback.format_exception(*sys.exc_info())))
+    def check_for_normalisation(self, subjects, fixed_image):
+        """check that normalisation to T1-template was performed before CT-registration in order to avoid redundancy"""
+        from itertools import compress
 
-    @staticmethod
-    def ANTrescale_image(image_sequence, mm_spacing, method):
-        """Function aiming at rescaling imaging to a resolution specified somewhere, e.g. in the cfg-file"""
+        bc_prefix = self.cfg["preprocess"]["ANTsN4"]["prefix"] + 't1_' # normalisation always with respect to T1
+        if not fixed_image:
+            fixed_image = self.cfg["preprocess"]["normalisation"]["prefix"] + 'run1_' + bc_prefix
 
-        resolution = [mm_spacing] * 3
-        if len(image_sequence.spacing) == 4:
-            resolution.append(image_sequence.spacing[-1])
-        elif len(image_sequence.spacing) > 4:
-            HF.msg_box(text='Sequences of >4 dimensions are not possible.', title='Too many dimensions')
-        resampled_image = ants.resample_image(image_sequence, (resolution), use_voxels=False, interp_type=method)
+        included_sequences = [bc_prefix.upper(), '{}'.format(fixed_image.upper())]
 
-        return resampled_image
+        incomplete = [False] * len(subjects)
+        for idx, subj in enumerate(subjects):
+            allfiles_subj = HF.get_filelist_as_tuple(inputdir=self.cfg["folders"]["nifti"], subjects=[subj])
+
+            files_exist = []
+            [files_exist.extend([os.path.isfile(x[0])])
+             for x in allfiles_subj for y in included_sequences
+             if re.search(r'\w+(?!_).({}).'.format(y), x[0], re.IGNORECASE)
+             and x[0].endswith('.nii')]
+
+            if not all(files_exist):
+                incomplete[idx] = True
+
+        subjects2normalise = list(compress(subjects, incomplete))
+        if subjects2normalise:
+            print('Of {} subjects\'s T1-imaging, {} were not yet normalised to template. \nStarting with '
+                  'normalisation for {}'.format(len(subjects), len(subjects2normalise)),
+                  ', '.join(x for x in subjects2normalise))
+            self.ANTsCoregisterMRI2template(subjects2normalise) # running normalisation with all identified subjects
+        else:
+            print('T1-sequences of {} subject(s) was/were already normalised, proceeding!'.format(len(subjects)))
 
     @staticmethod
     def inner_join(a, b):
         """adapted from: https://stackoverflow.com/questions/31887447/how-do-i-merge-two-lists-of-tuples-based-on-a-key"""
         L = a + b
-        L.sort(key=itemgetter(1)) # sort by the first column
+        L.sort(key=itemgetter(1))  # sort by the first column
         for _, group in groupby(L, itemgetter(1)):
             row_a, row_b = next(group), next(group, None)
-            if row_b is not None: # join
+            if row_b is not None:  # join
                 yield row_b[0:1] + row_a  # cut 1st column from 2nd row

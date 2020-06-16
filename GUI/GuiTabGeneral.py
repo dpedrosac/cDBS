@@ -7,9 +7,10 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import utils.HelperFunctions as HF
-from GUI.GUIdcm2nii import MainGuiDcm2nii
+from tests.GUIdcm2nii import MainGuiDcm2nii
 from utils.settingsRenameFolders import RenameFolderNames
-import private.CheckDefaultFolders as LocationCheck
+from GUI.GuiTwoLists_generic import TwoListGUI
+from dependencies import ROOTDIR
 import private.allToolTips as setToolTips
 
 
@@ -48,6 +49,7 @@ class GuiTabGeneral(QWidget):
         self.HBoxUpperLeftTab.addWidget(self.lblWdirTab)
 
         self.btnChangeWdir = QPushButton('Change working directory')
+        self.btnChangeWdir.setToolTip(setToolTips.ChangeWdirDICOM())
         self.btnChangeWdir.clicked.connect(self.change_wdir)
 
         self.btnReloadFilesTab = QPushButton('Reload files')
@@ -67,9 +69,9 @@ class GuiTabGeneral(QWidget):
         self.btn_dcm2nii.setToolTip(setToolTips.runDCM2NII())
         self.btn_dcm2nii.clicked.connect(self.run_DCM2NII)
 
-        self.btn_viewer = QPushButton('Display\nfolder content')
+        self.btn_viewer = QPushButton('View available \nNIFTI-files in viewer')
         self.btn_viewer.setToolTip(setToolTips.displayFolderContent())
-        self.btn_viewer.clicked.connect(self.view_files)
+        self.btn_viewer.clicked.connect(self.show_nifti_files)
 
         self.btn_renaming = QPushButton('Rename\nfolders')
         self.btn_renaming.setToolTip(setToolTips.renameFolders())
@@ -112,7 +114,7 @@ class GuiTabGeneral(QWidget):
         self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
         self.cfg["folders"]["nifti"] = self.niftidir
-        with open(os.path.join(os.getcwd(), 'config_imagingTB.yaml'), 'wb') as settings_mod:
+        with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
             yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
                            explicit_start=True, allow_unicode=True, encoding='utf-8')
 
@@ -122,30 +124,11 @@ class GuiTabGeneral(QWidget):
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
+
         self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
         self.availableNiftiTab.clear()
-        #self.availableNiftiTab2.clear()
         itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
-#        itemsChanged = self.read_subjlist(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
-        #self.add_available_items(self.availableNiftiTab2, itemsChanged)
-
-# This was moved to helper functions. Can be renmoved if there is no further problem in a future
-#    @staticmethod
-#    def read_subjlist(inputdir, prefix='subj', files2lookfor='NIFTI'):
-#        """takes folder and lists all available subjects in this folder according to some filter given as [prefix]"""
-#
-#        list_all = [name for name in os.listdir(inputdir)
-#                    if (os.path.isdir(os.path.join(inputdir, name)) and prefix in name)]
-#
-#        if list_all == '':
-#            list_subj = 'No available subjects, please make sure {}-files are present and correct ' \
-#                        '"prefix" is given'.format(files2lookfor)
-#        else:
-#            #list_subj = [x.split("_")[0] for x in list_all]
-#            list_subj = set(list_all)
-#
-#        return list_subj
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is
@@ -157,15 +140,6 @@ class GuiTabGeneral(QWidget):
 
             for i in range(len(items)):
                 self.selected_subj_Gen.append(str(self.availableNiftiTab.selectedItems()[i].text()))
-        #            print(self.selected_subj_Gen)
-        #elif self.sender() == self.availableNiftiTab2:
-        #    items = self.availableNiftiTab2.selectedItems()
-        #    self.selected_subj_ANT = []
-
-        #    for i in range(len(items)):
-        #        self.selected_subj_ANT.append(str(self.availableNiftiTab2.selectedItems()[i].text()))
-
-            # self.selected_subj_ANT = self.availableNiftiTab2.currentItem().text()
 
     def add_available_items(self, sending_list, items, msg='yes'):
         """adds the available subjects in the working directory into the items list;
@@ -195,15 +169,18 @@ class GuiTabGeneral(QWidget):
 
 
     def run_rename_folders(self):
-        from dependencies import ROOTDIR
+        """Renames all folders with a similar prefix; After that manual reloading is necessary"""
+
         self.convertFolders = RenameFolderNames(ROOTDIR)
         self.convertFolders.show()
 
-    def view_files(self):
-        """This function displays the selected folder/subject in an external viewer (default:ITK-snap)"""
+    def show_nifti_files(self):
+        """this function opens a list dialog and enables selecting NIFTI files for e.g. check the content (identical
+        function as in GUITabPreprocessANTs.py."""
+
         if not self.selected_subj_Gen:
-            HF.msg_box(text="No folder selected. To proceed, please indicate which subject to look for",
-                                     title="No subject selected")
+            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
+                       title="No subject selected")
             return
         elif len(self.selected_subj_Gen) > 1:
             HF.msg_box(text="Please select only one folder to avoid loading too many images",
@@ -212,15 +189,14 @@ class GuiTabGeneral(QWidget):
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_Gen[0])
 
-        HF.display_files_in_viewer(image_folder, regex2include=['T1_', 'T2_'],
-                                   regex2exclude=['_T1_', '_T2_', 'bc_T1_', 'bc_T2_', 'bc_ep2d_', 'ep2d_'],
-                                   selected_subjects=self.selected_subj_Gen)
+        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
+        self.SelectFiles.show()
+
 
     def run_DCM2NII(self):
         """wrapper to start the GUI which enables to batch preprocess DICOM dolers and convert them to NIFTI files"""
         self.convertFiles = MainGuiDcm2nii()
         self.convertFiles.show()
-
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ import utils.HelperFunctions as HF
 import utils.preprocANTSpy as ANTspy
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
 import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
 
 class GuiTabDetectLeads(QWidget):
     """Tab which shows the options for preprocessing data, that is N4BiasfieldCorrection and Coregestiering of pre- and
@@ -134,7 +135,7 @@ class GuiTabDetectLeads(QWidget):
         self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
         self.cfg["folders"]["nifti"] = self.niftidir
-        with open(os.path.join(os.getcwd(), 'config_imagingTB.yaml'), 'wb') as settings_mod:
+        with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
             yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
                            explicit_start=True, allow_unicode=True, encoding='utf-8') # saves new folder to yaml-file
 

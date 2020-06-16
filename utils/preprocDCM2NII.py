@@ -22,16 +22,15 @@ class PreprocessDCM:
         self.DCM2NIIX_ROOT = os.path.join(ROOTDIR, 'ext', 'dcm2niix')
 
         if not os.path.isdir(self.cfg["folders"]["dicom"]):
-            HF.msg_box(text="Please indicate a correct folder in the main GUI", title="Woring folder")
+            HF.msg_box(text="Please indicate a correct folder in the main GUI", title="Wrong folder")
         else:
             self.inputdir = self.cfg["folders"]["dicom"]
 
         subjlist = self.create_subjlist(_folderlist)
 
         if not os.path.isdir(self.DCM2NIIX_ROOT):
-            text = "Extracting imaging data from DICOM files unsuccessful because of wrong folder for dcm2niix."
-            title = "Wrong folder!"
-            HF.LittleHelpers.msg_box(text=text, title=title)
+            HF.LittleHelpers.msg_box(text="Extracting imaging data from DICOM files unsuccessful because of wrong "
+                                          "folder for dcm2niix.", title="Wrong folder!")
             return
 
         if not os.path.isdir(self.cfg["folders"]["nifti"]):
@@ -43,6 +42,8 @@ class PreprocessDCM:
             self.outdir = self.cfg["folders"]["nifti"]
 
         lastsubj = self.get_index_nifti_folders(self.outdir, prefix=self.cfg["folders"]["prefix"])
+
+        self.create_csv_subjlist(subjlist, int(lastsubj))
         self.convert_dcm2nii(subjlist, last_idx=int(lastsubj))
 
     def convert_dcm2nii(self, dicomfolders, last_idx):
@@ -81,15 +82,14 @@ class PreprocessDCM:
         # general settings for the extraction to work and log data
         modalities = ['CT', 'MRI']
         if self.logfile:
-            log_filename = os.path.join(self.cfg["folders"]["rootdir"], 'logs',
-                                        "log_DCM2NII_" + str(no_subj + last_idx) + time.strftime("%Y%m%d-%H%M%S"))
+            log_filename = os.path.join(ROOTDIR, 'logs', "log_DCM2NII_" + str(no_subj + last_idx) +
+                                        time.strftime("%Y%m%d-%H%M%S"))
         else:
             log_filename = os.devnull
 
         subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj + last_idx))
 
-        if not os.path.isdir(subj_outdir):
-            os.mkdir(subj_outdir)
+        HF.LittleHelpers.create_folder(subj_outdir)
         start_time_subject = time.time()
         keptfiles, deletedfiles = ([] for i in range(2))
 
@@ -130,35 +130,25 @@ class PreprocessDCM:
                                          subject=self.cfg["folders"]["prefix"] + str(no_subj), module='dcm2nii',
                                          opt=self.cfg["preprocess"]["dcm2nii"], project="")
 
-    def create_csv_subjlist(self, dicomfolders, last_idx):
+    def create_csv_subjlist(self, subjlist, first_index):
         """ this function creates a csv-files which aims at providing information about which name/pseudnonym, etc.
-         corresponds to the respective subject in the NIFTI-folders
+         corresponds to the respective subject in the NIFTI-folders"""
 
-        :param dicomfolders: directory with original DICOM folders
-        :param last_idx: index of last subject that has already been transformed, so that data can be processed in
-                        several steps
-        :return: none, saves a csv-file in the directory in which folder with NIFTI files are stored
-        """
-
-        subj_list_save = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
-        if not os.path.isfile(subj_list_save):
+        subjlist_filename = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
+        if not os.path.isfile(subjlist_filename):
             df_save = pds.DataFrame(columns=['name', 'folder'])
         else:
-            df_save = pds.read_csv(subj_list_save, sep='\t')
+            df_save = pds.read_csv(subjlist_filename, index_col=0, sep='\t')
 
-        data_new = {'name': [], 'folder': []}
-        for idx, name in enumerate(dicomfolders, start=last_idx + 1):
-            data_new['name'].append(name)
-            data_new['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
+        dtemp = {'name': [], 'folder': []}
+        for idx, name in enumerate(subjlist, start=first_index + 1):
+            dtemp['name'].append(name)
+            dtemp['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
 
-        df_new = pds.DataFrame(data_new, columns=['name', 'folder'])
-        df_save.append(df_new)
+        df_new = pds.DataFrame(dtemp, columns=['name', 'folder'])
+        df_save = df_save.append(df_new)
         df_save.reset_index(drop=True)
-        df_save.to_csv(subj_list_save, index=True, header=True, sep='\t')
-
-    @staticmethod
-    def backline():
-        print('\r', end='')
+        df_save.to_csv(subjlist_filename, index=True, header=True, sep='\t')
 
     def select_sequences(self, subj_outdir):
         """Function enabling user to select only some sequences; this is particularly helpful when a stack of files
@@ -208,10 +198,9 @@ class PreprocessDCM:
 
     @staticmethod
     def create_subjlist(folderlist):
-        """creates a set of subjects; Especially, different modalities are summarised as one but only if filenames are
-        identical; the extraction of DICOM is somehow different to the rest of the lists because of possibly many
-        folders for one subject, so that a separate function is required instead of the one in the HelperFunction
-        class """
+        """creates a set of subjects; Especially, different modalities are summarised as one iff filenames identical;
+        extraction of DICOM is somehow different to rest of lists because of possibly >1 folders per subj., so that
+        separate function is necessary instead of the one in [HelperFunction]"""
 
         allnames = [re.findall("[a-z][^A-Z]*", x) for x in folderlist]
         available_subj = set(x for letters in allnames for x in letters)
@@ -226,9 +215,14 @@ class PreprocessDCM:
         list_dirs = [subdir for subdir in os.listdir(niftidir) if (prefix in subdir and
                                                                    os.path.isdir(os.path.join(niftidir, subdir)) and
                                                                    len(os.listdir(os.path.join(niftidir, subdir))) > 0)]
-        if not list_dirs:
+        try:
+            all_endings = [int(re.search(r'(' + prefix + ')(\w+)', x).group(2)) for x in list_dirs]
+        except ValueError:
+            idx = 0
+
+        if not all_endings:
             idx = 0
         else:
-            idx = list_dirs[-1].split(prefix)[-1]
+            idx = sorted(all_endings)[-1]
 
         return idx

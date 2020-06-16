@@ -49,6 +49,7 @@ class ContentTwoListGUI(QWidget):
             options = {'folderbox_title': "Directory (DICOM-files)",
                        'str_labelDir':'DICOM DIR: {}'.format(self.working_dir),
                        'runBTN_label': 'Run processing'}
+
         elif self.option_gui == "displayNiftiFiles":
             if not working_directory:
                 HF.msg_box(text='Please provide a valid folder. Terminating this GUI.', title='No folder provided')
@@ -135,7 +136,7 @@ class ContentTwoListGUI(QWidget):
         self.btn_preferences = QPushButton("Preferences")
         self.btn_preferences.setDisabled(True)
         self.btn_preferences.clicked.connect(self.settings_show)
-        if self.option_gui != "dcm2niix":
+        if self.option_gui == "dcm2niix":
             self.btn_preferences.setEnabled(True)
 
         self.btn_run_command = QPushButton(options["runBTN_label"])
@@ -166,7 +167,7 @@ class ContentTwoListGUI(QWidget):
             if self.option_gui == 'dcm2niix':
                 items = HF.list_folders(self.working_dir, prefix='')
             else:
-                items = HF.list_files_in_folder(inputdir=self.working_dir, contains=['mpr', 'CT'], suffix='nii')
+                items = HF.list_files_in_folder(inputdir=self.working_dir, contains='', suffix='nii')
             self.addAvailableItems(items)
         except FileExistsError:
             print('{} without any valid files/folders, continuing ...'.format(self.working_dir))
@@ -219,26 +220,21 @@ class ContentTwoListGUI(QWidget):
         """starts the process linked to the module selected; that is in case of dcm2nii it runs the extraction of nifti-
         files from the DICOM folder or in case of displayN4corr it displays all nifti files available in the folder"""
 
-        folderlist = []
-        [folderlist.append(self.mOutput.item(x).text()) for x in range(self.mOutput.count())]
-        print('in total, {} folders were selected'.format(len(folderlist)))
+        input = []
+        [input.append(self.mOutput.item(x).text()) for x in range(self.mOutput.count())]
 
-        if not folderlist:
+        if not input:
             HF.LittleHelpers.msg_box(text="At least one folder with data must be selected!",
                                      title='No directory selected')
-        elif len(folderlist) != 0 and self.option_gui == "dcm2niix":
-            preprocDCM2NII.PreprocessDCM(folderlist)
-        elif len(folderlist) != 0 and self.option_gui == "displayNiftiFiles":
-            input_folder = self.cfg["folders"]["nifti"]
-            files_corrected = []
-            [files_corrected.extend(glob.glob(os.path.join(input_folder, x + "/" +
-                                                           self.cfg["preprocess"]["ANTsN4"]["prefix"] + "*")))
-             for x in folderlist]
-            files_original = [''.join(x.split(self.cfg["preprocess"]["ANTsN4"]["prefix"])) for x in files_corrected]
+        elif len(input) != 0 and self.option_gui == "dcm2niix":
+            print('in total, {} folders were selected'.format(len(input)))
+            preprocDCM2NII.PreprocessDCM(input)
+        elif len(input) != 0 and self.option_gui == "displayNiftiFiles":
+            input_with_path = []
+            [input_with_path.extend(glob.glob(self.working_dir + '/**/' + x, recursive=True)) for x in input]
 
             viewer = 'itk-snap'  # to-date, only one viewer is available. May be changed in a future
-            if len(files_corrected) + len(files_original) != 0:
-                HF.LittleHelpers.load_imageviewer(viewer, files_original + files_corrected)
+            HF.LittleHelpers.load_imageviewer(viewer, input_with_path)
 
     @QtCore.pyqtSlot()
     def update_buttons_status(self):

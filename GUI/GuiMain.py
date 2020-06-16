@@ -45,7 +45,6 @@ class TabContent(QWidget):
         self.tabs = QTabWidget()
         self.tabs.resize(150, 100)
         self.layout.addWidget(self.tabs)
-        # self.setLayout(self.layout)
 
         # Customize tabs
         # ==============================    Tab 1 - General   ==============================
@@ -59,7 +58,6 @@ class TabContent(QWidget):
         # ==============================    Tab 3 - Lead detection   ==============================
         self.tab3 = GuiTabPreprocessANTs()
         self.tabs.addTab(self.tab3, "Detect leads (Pacer)")
-
 
         # Add tabs to widget
         self.layout.addWidget(self.tabs)

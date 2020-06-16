@@ -28,13 +28,17 @@ preprocess:
     ReorientCrop: 'no'
     Verbosity: 1
   metdata: patients.xlsx
+  normalisation:
+    prefix: norm_
+    sequences: T1_,T2_,PD_
+    template_image: mni_icbm152_nlin_asym_09b
   registration:
     custom_registration_file: cmdline_ANTsRegistration.txt
     default_registration: 'yes'
-    default_registration_metric: SyNRA
     metric:
     - mattes
     - GC
     prefix: reg_
+    registration_method: SyNRA
     resample_method: '0'
     resample_spacing: '0.7'

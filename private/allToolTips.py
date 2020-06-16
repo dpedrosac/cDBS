@@ -6,6 +6,11 @@ def subjectDetails():
     text = 'Displays the subject details and the names of the subjects corresponding to the prefix'
     return HF.LittleHelpers.split_lines(text)
 
+def ChangeWdirDICOM():
+    text = ('Opens another dialog in which the DICOM directory may be changed. For actions to take place, press '
+            '"reload files" button')
+    return HF.LittleHelpers.split_lines(text)
+
 def runDCM2NII():
     text = 'Separate GUI to transform DICOM files using Chris Rordens routines ' \
            'see http://www.nitrc.org/projects/dcm2nii/'
@@ -40,6 +45,17 @@ def RegisterCT2MRI():
            "command-line for running ANTsRegistration can be modified according to the file: " \
            "cmdline_ANTsRegistration.txt in the .utils directory. Please make sure to include all terms within *...* " \
            "into the text-file as they will be replaced."
+    return HF.LittleHelpers.split_lines(text)
+
+def RegisterMRI2template():
+    text = "Runs registration of MR-imaging (moving) to template sequences (fixed) as defined in the config file in " \
+           "order to get them into same space. The default option constitutes three steps: a) Rigid, " \
+           "b) Affine registration and c) Symmetric image Normalisation (SyN), although all options available in ANTsPy" \
+           "are possible (for details see https://github.com/ANTsX/ANTsPy/blob/master/ants/registration/interface.py. " \
+           "Non-default means, that the command-line for running ANTsRegistration can be modified according to " \
+           "the file: cmdline_ANTsRegistration.txt in the .utils directory. Please make sure to include all terms " \
+           "within *...* into the text-file as they will be replaced."
+
     return HF.LittleHelpers.split_lines(text)
 
 

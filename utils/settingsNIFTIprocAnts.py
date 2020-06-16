@@ -4,11 +4,12 @@
 import sys
 import yaml
 import os
+import glob
 import utils.HelperFunctions as HF
 import private.allToolTips as setToolTips
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, \
-    QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox
+    QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox, QComboBox
 from dependencies import ROOTDIR
 
 class GuiSettingsNiftiAnts(QWidget):
@@ -16,7 +17,7 @@ class GuiSettingsNiftiAnts(QWidget):
       data"""
 
     def __init__(self, parent=None):
-        super(QWidget, self).__init__(parent=None)
+        super(GuiSettingsNiftiAnts, self).__init__(parent=None)
 
         # Load configuration files and general settings
         self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
@@ -134,9 +135,9 @@ class GuiSettingsNiftiAnts(QWidget):
         # ==============================    Create Content for Right Upper Box   ==============================
         self.optionboxRegistration = QGroupBox('ImageRegistration')
         self.settings_list2 = QVBoxLayout(self.optionboxRegistration)
-        self.settings_list2.addLayout(lay1)
+        #self.settings_list2.addLayout(lay1)
 
-        self.labelPrefixRegistration = QLabel('Output prefix?\t\t')
+        self.labelPrefixRegistration = QLabel('Registration prefix?\t')
         #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
         self.lineEditPrefixRegistration = QLineEdit()
 
@@ -145,14 +146,23 @@ class GuiSettingsNiftiAnts(QWidget):
         lay8.addWidget(self.lineEditPrefixRegistration)
         lay8.addStretch()
 
+        self.labelPrefixNormalisation = QLabel('Normalisation prefix?\t')
+        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        self.lineEditPrefixNormalisation = QLineEdit()
+
+        lay9 = QHBoxLayout()
+        lay9.addWidget(self.labelPrefixNormalisation)
+        lay9.addWidget(self.lineEditPrefixNormalisation)
+        lay9.addStretch()
+
         self.labelResampleSpacing = QLabel('Resample Spacing?\t')
         self.labelResampleSpacing.setToolTip(setToolTips.LabelResampleImages())
         self.lineResampleSpacing = QLineEdit()
 
-        lay9 = QHBoxLayout()
-        lay9.addWidget(self.labelResampleSpacing)
-        lay9.addWidget(self.lineResampleSpacing)
-        lay9.addStretch()
+        lay10 = QHBoxLayout()
+        lay10.addWidget(self.labelResampleSpacing)
+        lay10.addWidget(self.lineResampleSpacing)
+        lay10.addStretch()
 
         self.labelResampleMethod = QLabel('Resampling method?\t')
         self.labelResampleMethod.setToolTip(setToolTips.ResampleMethod())
@@ -174,13 +184,13 @@ class GuiSettingsNiftiAnts(QWidget):
         self.btngroup_ResampleMethod.addButton(self.rbtnResample3)
         self.btngroup_ResampleMethod.addButton(self.rbtnResample4)
 
-        lay10 = QHBoxLayout()
-        lay10.addWidget(self.labelResampleMethod)
-        lay10.addWidget(self.rbtnResample0)
-        lay10.addWidget(self.rbtnResample1)
-        lay10.addWidget(self.rbtnResample2)
-        lay10.addWidget(self.rbtnResample3)
-        lay10.addWidget(self.rbtnResample4)
+        lay11 = QHBoxLayout()
+        lay11.addWidget(self.labelResampleMethod)
+        lay11.addWidget(self.rbtnResample0)
+        lay11.addWidget(self.rbtnResample1)
+        lay11.addWidget(self.rbtnResample2)
+        lay11.addWidget(self.rbtnResample3)
+        lay11.addWidget(self.rbtnResample4)
 
         self.labelDefaultSettings = QLabel('Default registration?\t')
         #        self.labelPrefix.setToolTip(setToolTips.LabelPrefixBias())
@@ -192,29 +202,100 @@ class GuiSettingsNiftiAnts(QWidget):
 
         self.btngroup_DefaultSettingsRegistration.addButton(self.rbtnDefaultRegistrationy)
         self.btngroup_DefaultSettingsRegistration.addButton(self.rbtnDefaultRegistrationn)
-        lay11 = QHBoxLayout()
-        lay11.addWidget(self.labelDefaultSettings)
-        lay11.addWidget(self.rbtnDefaultRegistrationy)
-        lay11.addWidget(self.rbtnDefaultRegistrationn)
-        lay11.addStretch()
+        lay12 = QHBoxLayout()
+        lay12.addWidget(self.labelDefaultSettings)
+        lay12.addWidget(self.rbtnDefaultRegistrationy)
+        lay12.addWidget(self.rbtnDefaultRegistrationn)
+        lay12.addStretch()
+
+        self.labelRegistrationMethod = QLabel('Registration method?\t')
+        #self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
+        self.lineRegistrationMethod = QComboBox()
+        allowable_tx = [
+            "SyNBold",
+            "SyNBoldAff",
+            "ElasticSyN",
+            "SyN",
+            "SyNRA",
+            "SyNOnly",
+            "SyNAggro",
+            "SyNCC",
+            "TRSAA",
+            "SyNabp",
+            "SyNLessAggro",
+            "TVMSQ",
+            "TVMSQC",
+            "Rigid",
+            "Similarity",
+            "Translation",
+            "Affine",
+            "AffineFast",
+            "BOLDAffine",
+            "QuickRigid",
+            "DenseRigid",
+            "BOLDRigid",
+        ]
+        [self.lineRegistrationMethod.addItem(x) for x in allowable_tx]
+        idx_method = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["registration"]["registration_method"],
+                                                          QtCore.Qt.MatchFixedString)
+        if idx_method >= 0:
+            self.lineRegistrationMethod.setCurrentIndex(idx_method)
+        self.lineRegistrationMethod.currentTextChanged.connect(self.comboChangedRegDefault)
+        self.lineRegistrationMethod.setDisabled(True)
+
+        lay13 = QHBoxLayout()
+        lay13.addWidget(self.labelRegistrationMethod)
+        lay13.addWidget(self.lineRegistrationMethod)
+        lay13.addStretch()
 
         self.labelCustomRegistration = QLabel('Edit registration settings?\t')
         self.PushButtonViewRegistration = QPushButton("Edit cmdline")
         self.PushButtonViewRegistration.setDisabled(True)
         self.PushButtonViewRegistration.clicked.connect(self.viewRegistrationCmdLine)
 
-        lay12 = QHBoxLayout()
-        lay12.addWidget(self.labelCustomRegistration)
-        lay12.addWidget(self.PushButtonViewRegistration)
-        lay12.addStretch()
+        lay14 = QHBoxLayout()
+        lay14.addWidget(self.labelCustomRegistration)
+        lay14.addWidget(self.PushButtonViewRegistration)
+        lay14.addStretch()
+
+        self.labelNormalisationTemplate = QLabel('Normalisation template?\t')
+        #self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
+        self.lineTemplatesAvailable = QComboBox()
+        template_list = ['mni_icbm152_nlin_asym_09b']
+        [self.lineTemplatesAvailable.addItem(os.path.split(x)[1]) for x in
+         glob.glob(os.path.join(ROOTDIR, 'ext', 'templates' + '/*'))]
+        idx_template = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["normalisation"]["template_image"],
+                                                          QtCore.Qt.MatchFixedString)
+        if idx_template >= 0:
+            self.lineRegistrationMethod.setCurrentIndex(idx_template)
+        self.lineTemplatesAvailable.currentTextChanged.connect(self.comboChangedNormalisation)
+
+        lay15 = QHBoxLayout()
+        lay15.addWidget(self.labelNormalisationTemplate)
+        lay15.addWidget(self.lineTemplatesAvailable)
+        lay15.addStretch()
+
+        self.labelNormalisationSequences = QLabel('Sequences to normalise?\t')
+        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        self.lineEditNormalisationSequences = QLineEdit()
+
+        lay16 = QHBoxLayout()
+        lay16.addWidget(self.labelNormalisationSequences)
+        lay16.addWidget(self.lineEditNormalisationSequences)
+        lay16.addStretch()
 
         self.settings_list2.addLayout(lay8)
-        self.settings_list2.addStretch(1)
         self.settings_list2.addLayout(lay9)
-        self.settings_list2.addLayout(lay10)
         self.settings_list2.addStretch(1)
+        self.settings_list2.addLayout(lay10)
         self.settings_list2.addLayout(lay11)
+        self.settings_list2.addStretch(1)
         self.settings_list2.addLayout(lay12)
+        self.settings_list2.addLayout(lay13)
+        self.settings_list2.addLayout(lay14)
+        self.settings_list2.addStretch(1)
+        self.settings_list2.addLayout(lay15)
+        self.settings_list2.addLayout(lay16)
         self.settings_list2.addStretch(10)
 
         # Merge all upper boxes
@@ -282,9 +363,10 @@ class GuiSettingsNiftiAnts(QWidget):
             self.lineEditDiffPrefix.setText(str(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]))
 
             # Right side, i.e. Registration
-
             self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
             self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
+            self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
+            self.lineEditNormalisationSequences.setText(str(self.cfg["preprocess"]["normalisation"]["sequences"]))
 
 
     def closeEvent(self, event):
@@ -303,6 +385,9 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg["preprocess"]["registration"]["prefix"] = self.lineEditPrefixRegistration.text()
         self.cfg["preprocess"]["registration"]["resample_spacing"] = self.lineResampleSpacing.text()
 
+        self.cfg["preprocess"]["normalisation"]["prefix"] = self.lineEditPrefixNormalisation.text()
+        self.cfg["preprocess"]["normalisation"]["sequences"] = self.lineEditNormalisationSequences.text()
+
         HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
         event.accept()
 
@@ -317,6 +402,17 @@ class GuiSettingsNiftiAnts(QWidget):
                 self.cfg["preprocess"]["ANTsN4"] = cfg_temp["preprocess"]["ANTsN4"]
                 self.cfg["preprocess"]["registration"] = cfg_temp["preprocess"]["registration"]
         self.get_settings_from_config()
+
+        idx_method = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["registration"]["registration_method"],
+                                                          QtCore.Qt.MatchFixedString)
+        if idx_method >= 0:
+            self.lineRegistrationMethod.setCurrentIndex(idx_method)
+
+        idx_template = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["normalisation"]["template_image"],
+                                                          QtCore.Qt.MatchFixedString)
+        if idx_template >= 0:
+            self.lineRegistrationMethod.setCurrentIndex(idx_template)
+        self.lineTemplatesAvailable.currentTextChanged.connect(self.comboChangedNormalisation)
 
     @QtCore.pyqtSlot()
     def viewRegistrationCmdLine(self):
@@ -358,9 +454,20 @@ class GuiSettingsNiftiAnts(QWidget):
 
         if self.sender().text() == 'no':
             self.PushButtonViewRegistration.setEnabled(True)
+            self.lineRegistrationMethod.setEnabled(False)
         else:
             self.PushButtonViewRegistration.setEnabled(False)
+            self.lineRegistrationMethod.setEnabled(True)
 
+    @QtCore.pyqtSlot()
+    def comboChangedRegDefault(self):
+        self.cfg["preprocess"]["registration"]["registration_method"] = self.lineRegistrationMethod.currentText()
+        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+
+    @QtCore.pyqtSlot()
+    def comboChangedNormalisation(self):
+        self.cfg["preprocess"]["normalisation"]["template_image"] = self.lineTemplatesAvailable.currentText()
+        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
 
 
 if __name__ == "__main__":
