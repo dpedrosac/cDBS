@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import utils.HelperFunctions as HF
-import utils.preprocANTSpy as ANTspy
+import utils.preprocANTSpy as ANTspyRoutines
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
 from GUI.GuiTwoLists_generic import TwoListGUI
 import private.allToolTips as setToolTips
@@ -83,10 +83,10 @@ class GuiTabPreprocessANTs(QWidget):
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.QualityTabANTs = QGroupBox("Quality checks for ANTs preprocessing")
         self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabANTs)
-        self.btn_BiasCorrQC = QPushButton('View available \nNIFTI-files in viewer')
-        self.btn_BiasCorrQC.setToolTip(setToolTips.checkN4BiasCorrectionresults())
-        self.btn_BiasCorrQC.clicked.connect(self.compare_n4Bias_results)
-        self.HBoxLowerLeftTab.addWidget(self.btn_BiasCorrQC)
+        self.btn_QC_ANTsPreproc = QPushButton('View available \nNIFTI-files in viewer')
+        self.btn_QC_ANTsPreproc.setToolTip(setToolTips.checkN4BiasCorrectionresults())
+        self.btn_QC_ANTsPreproc.clicked.connect(self.compare_n4Bias_results)
+        self.HBoxLowerLeftTab.addWidget(self.btn_QC_ANTsPreproc)
 
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
@@ -179,7 +179,7 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
+                ANTspyRoutines.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
 
     def run_ANTsPreferences(self):
         """change the settings for the ANTs routines, that is N4BiasCorrection and registration of CT/MRI """
@@ -217,8 +217,8 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT,
-                                                            input_folder=self.cfg["folders"]["nifti"])
+                ANTspyRoutines.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT,
+                                                                    input_folder=self.cfg["folders"]["nifti"])
 
     def run_RegisterMRI2template(self):
         """Wrapper to run the coregistration routines for the MRI (moving image) to MRI templates (fixed image)
@@ -234,7 +234,7 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().ANTsCoregisterMRI2template(subjects=self.selected_subj_ANT)
+                ANTspyRoutines.ProcessANTSpy().ANTsCoregisterMRI2template(subjects=self.selected_subj_ANT)
 
 
 if __name__ == '__main__':

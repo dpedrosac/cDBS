@@ -8,8 +8,7 @@ import time
 import utils.HelperFunctions as HF
 import multiprocessing as mp
 import glob
-import sys
-import traceback
+import antspynet
 import numpy as np
 import shutil
 from itertools import groupby
@@ -138,9 +137,9 @@ class ProcessANTSpy:
         ants.image_write(bcorr_image, filename=filename_save)
 
     def ANTsCoregisterMRI2template(self, subjects):
-        """function performing Coregistration between MRI and specific template"""
+        """function performing Co-Registration between MRI and specific template"""
 
-        print('\nStarting Coregistration for {} subject(s)'.format(len(subjects)))
+        print('\nStarting Co-Registration for {} subject(s)'.format(len(subjects)))
         allfiles = HF.get_filelist_as_tuple(inputdir=self.cfg["folders"]["nifti"], subjects=subjects)
         templatefiles = glob.glob(os.path.join(ROOTDIR, 'ext', 'templates', self.cfg["preprocess"]["normalisation"]
         ["template_image"] + '/*'))
@@ -297,10 +296,6 @@ class ProcessANTSpy:
                                                            ANTsImageObject=sequence, file_id=file_id,
                                                            method=int(self.cfg["preprocess"]["registration"]
                                                                       ["resample_method"]))
-        skull_strip = 0
-        if skull_strip:
-            print('Implementation still required!')  # TODO: implement the brain extraction routine from ANTsPyNET
-
         fixed_sequence_filename = fixed_sequence
         if run == 1:
             moving_sequence_filename = moving_sequence
@@ -324,11 +319,7 @@ class ProcessANTSpy:
                 os.rename(name_of_file[0],os.path.join(input_folder, files2rename[key]))
 
         ants.image_write(registered_images['warpedmovout'], filename=filename_save)
-
-        HF.LittleHelpers.create_folder(os.path.join(input_folder, "debug"))
-        #filename_save = os.path.join(input_folder, "debug", self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
-        #                             str(run) + '_' + os.path.split(moving_sequence)[1])
-        #ants.image_write(registered_images['warpedfixout'], filename=filename_save)
+        HF.LittleHelpers.create_folder(os.path.join(input_folder, "debug")) #creates
 
         # 'Previous registrations' are moved to debug-folder
         if run > 1:
@@ -337,6 +328,14 @@ class ProcessANTSpy:
             filename_dest = os.path.join(input_folder, "debug", self.cfg["preprocess"][flag]["prefix"] + 'RUNPREV_' +
                                          str(lastrun) + '_' + os.path.split(moving_sequence)[1])
             shutil.move(filename_previous, filename_dest)
+
+        skull_strip = 1
+        if skull_strip and 't1' in moving_sequence:
+            filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii')
+
+            brainmask = antspynet.brain_extraction(image=registered_images['warpedmovout'], verbose=False)
+            ants.image_write(image=brainmask, filename=filename_brainmask)
+
 
     def default_registration(self, image_to_process, sequence1, sequence2, inputfolder, log_filename, metric='mattes'):
         """runs the default version of the ANTs registration routine, that is a Rigid transformation, an affine trans-

@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
 import utils.HelperFunctions as HF
 import utils.preprocANTSpy as ANTspy
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
+from GUI.GuiTwoLists_generic import TwoListGUI
+import utils.preprocLeadCT as LeadDetectionRoutines
 import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
 
@@ -39,7 +41,7 @@ class GuiTabDetectLeads(QWidget):
         self.tab = QWidget()
 
         # Customize tab
-        # ==============================    Tab 2 - ANTs routines   ==============================
+        # ==============================    Tab 3 - Lead detection routines   ==============================
         self.tab.layout = QHBoxLayout()
         self.tab.setLayout(self.tab.layout)
 
@@ -59,47 +61,32 @@ class GuiTabDetectLeads(QWidget):
         self.HBoxUpperLeftTab.addWidget(self.btnReloadFilesTab)
 
         # ------------------------- Middle left part (Settings)  ------------------------- #
-        self.SettingsTabANTs = QGroupBox("Preferences")
-        self.HBoxMiddleLeftTabExt = QVBoxLayout(self.SettingsTabANTs)
+        self.SettingsTabLeadDetect = QGroupBox("Preferences")
+        self.HBoxMiddleLeftTabExt = QVBoxLayout(self.SettingsTabLeadDetect)
 
-        self.btn_ANTsettings = QPushButton('ANT Settings')
-        self.btn_ANTsettings.clicked.connect(self.run_ANTsPreferences)
-        self.btn_ANTsettings.setToolTip(setToolTips.ANTsSettings())
+        self.btn_LeadDetectSettings = QPushButton('Settings \nLead detection')
+        self.btn_LeadDetectSettings.clicked.connect(self.run_PreferencesLeadDetection)
+        self.btn_LeadDetectSettings.setToolTip(setToolTips.ANTsSettings())
 
-        self.HBoxMiddleLeftTabExt.addWidget(self.btn_ANTsettings)
+        self.HBoxMiddleLeftTabExt.addWidget(self.btn_LeadDetectSettings)
 
         # ------------------------- Middle left part (Processing)  ------------------------- #
-        self.ActionsTabANTs = QGroupBox("ANTs routines")
+        self.ActionsTabANTs = QGroupBox("Lead detection routines")
         self.HBoxMiddleLeftTab = QVBoxLayout(self.ActionsTabANTs)
+        self.btn_LeadDetectPacer = QPushButton('PaCER algorithm')
+        #self.btn_N4BiasCorr.setToolTip(setToolTips.N4BiasCorrection())
+        self.btn_LeadDetectPacer.clicked.connect(self.run_LeadDetectionPaCER)
 
-        self.btn_N4BiasCorr = QPushButton('N4BiasCorrect')
-        self.btn_N4BiasCorr.setToolTip(setToolTips.N4BiasCorrection())
-        self.btn_N4BiasCorr.clicked.connect(self.run_n4Bias_corr)
-
-        self.btn_CTreg = QPushButton('CT-Registration')
-        # self.btn_CTreg.setToolTip(setToolTips.RegisterCT2MRI())
-        self.btn_CTreg.clicked.connect(self.run_RegisterCT2MRI)
-
-        self.btn_MRIreg = QPushButton('MR-Registration')
-        self.btn_MRIreg.setToolTip('???')
-
-
-        self.HBoxMiddleLeftTab.addWidget(self.btn_N4BiasCorr)
-        self.HBoxMiddleLeftTab.addWidget(self.btn_CTreg)
-        self.HBoxMiddleLeftTab.addWidget(self.btn_MRIreg)
+        self.HBoxMiddleLeftTab.addWidget(self.btn_LeadDetectPacer)
 
         # ------------------------- Lower left part (Processing)  ------------------------- #
-        self.QualityTabANTs = QGroupBox("Quality checks for ANTs preprocessing")
-        self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabANTs)
-        self.btn_BiasCorrQC = QPushButton('Pre-/Post N4\nBias correction')
-        self.btn_BiasCorrQC.setToolTip(setToolTips.checkN4BiasCorrectionresults())
-        self.btn_BiasCorrQC.clicked.connect(self.compare_n4Bias_results)
-
-        self.btn_RegQC = QPushButton('Pre-/Post \nRegistration')
-        #       self.btn_RegQC.clicked.connect(self.run_n4Bias_corr)
-
-        self.HBoxLowerLeftTab.addWidget(self.btn_BiasCorrQC)
-        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
+        self.QualityTabLeadDetect = QGroupBox("Quality checks for Lead detection")
+        self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabLeadDetect)
+        self.btn_QC_LeadDetect = QPushButton('Check lead detection \nin viewer')
+        self.btn_QC_LeadDetect.setToolTip(setToolTips.checkN4BiasCorrectionresults())
+        self.btn_QC_LeadDetect.clicked.connect(self.CompareLeadDetection)
+        self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
+#        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
 
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
@@ -114,12 +101,12 @@ class GuiTabDetectLeads(QWidget):
 
         # Combine all Boxes for Tab 2 Layout
         self.LeftboxTabANTs = QGroupBox()
-        self.HBoxTabANTsLeft = QVBoxLayout(self.LeftboxTabANTs)
-        self.HBoxTabANTsLeft.addWidget(self.FolderboxTab)
-        self.HBoxTabANTsLeft.addStretch(1)
-        self.HBoxTabANTsLeft.addWidget(self.SettingsTabANTs)
-        self.HBoxTabANTsLeft.addWidget(self.ActionsTabANTs)
-        self.HBoxTabANTsLeft.addWidget(self.QualityTabANTs)
+        self.HBoxTabLeadDetectLeft = QVBoxLayout(self.LeftboxTabANTs)
+        self.HBoxTabLeadDetectLeft.addWidget(self.FolderboxTab)
+        self.HBoxTabLeadDetectLeft.addStretch(1)
+        self.HBoxTabLeadDetectLeft.addWidget(self.SettingsTabLeadDetect)
+        self.HBoxTabLeadDetectLeft.addWidget(self.ActionsTabANTs)
+        self.HBoxTabLeadDetectLeft.addWidget(self.QualityTabLeadDetect)
 
         self.tab.layout.addWidget(self.LeftboxTabANTs)
         self.tab.layout.addWidget(self.listbox)
@@ -180,9 +167,9 @@ class GuiTabDetectLeads(QWidget):
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     # Separate functions/GUIs that may be initialised here
-    def run_n4Bias_corr(self):
-        """wrapper to start the preprocessing, that is the GUI in which the different options for ANTs routines
-        are displayed"""
+    def run_LeadDetectionPaCER(self):
+        """wrapper to start the lead detection according to the PaCER algorithm which can be found under:
+        https://github.com/adhusch/PaCER/"""
 
         if not self.selected_subj_ANT:
             HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process. "
@@ -194,14 +181,15 @@ class GuiTabDetectLeads(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
+                LeadDetectionRoutines.LeadWorks().LeadDetection(subjects=self.selected_subj_ANT)
 
-    def run_ANTsPreferences(self):
+    def run_PreferencesLeadDetection(self):
         """change the settings for the ANTs routines, that is N4BiasCorrection and registration of CT/MRI """
-        self.ANTsSettings = GuiSettingsNiftiAnts()
-        self.ANTsSettings.show()
+        HF.msg_box(text='Not implemented yet!', title='Warning')
+        #self.ANTsSettings = GuiSettingsNiftiAnts()
+        #self.ANTsSettings.show()
 
-    def compare_n4Bias_results(self, include_dti=False):
+    def CompareLeadDetection(self, include_dti=False):
         """wrapper to start comparisons between pre- and post-processed images after N4BiasCorrection"""
 
         if not self.selected_subj_ANT:
@@ -215,24 +203,8 @@ class GuiTabDetectLeads(QWidget):
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0]) # Is the index necessary
 
-        HF.display_files_in_viewer(image_folder, regex2include=['T1_', 'T2_', 'bc_T1_', 'bc_T2_'],
-                                   regex2exclude=['bc_ep2d_', 'ep2d_'], selected_subjects=self.selected_subj_ANT)
-
-    def run_RegisterCT2MRI(self):
-        """Wrapper to run the coregistration routines for the CT (moving image) to the T1-sequence of the MRI
-        (fixed image) using ANTs routines"""
-
-        if not self.selected_subj_ANT:
-            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process. "
-                            "(For this option, numerous folders are possible for batch processing)",
-                       title="No subject selected")
-        else:
-            msg = "Are you sure you want to coregister the postoperative CT imaging in the following folders:\n\n" \
-                  "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
-            ret = QMessageBox.question(self, 'MessageBox', msg,
-                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-            if ret == QMessageBox.Yes:
-                ANTspy.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT)
+        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
+        self.SelectFiles.show()
 
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QVBoxLayout, QMainWindow, QTa
 import utils.HelperFunctions as HF
 from GUI.GuiTabGeneral import GuiTabGeneral
 from GUI.GuiTabPreprocessANTs import GuiTabPreprocessANTs
+from GUI.GuiTabDetectLeads import GuiTabDetectLeads
 from dependencies import ROOTDIR
 
 
@@ -56,7 +57,7 @@ class TabContent(QWidget):
         self.tabs.addTab(self.tab2, "Preprocess Imaging (ANTsPy)")
 
         # ==============================    Tab 3 - Lead detection   ==============================
-        self.tab3 = GuiTabPreprocessANTs()
+        self.tab3 = GuiTabDetectLeads()
         self.tabs.addTab(self.tab3, "Detect leads (Pacer)")
 
         # Add tabs to widget
