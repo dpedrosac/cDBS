@@ -137,10 +137,10 @@ class LeadWorks:
             # figure, scatterMatrix3(ccProps(1).PixelList)
             pass
 
-        elecIdxs = []
+        detected_leads = []
         for i, comp in enumerate(areas):
             pca = PCA()
-            X = np.multiply(comp.coords, np.tile(list(CTimaging.spacing), (len(comp.coords),1))) #TODO: Is that equivalent?!?
+            X = np.multiply(comp.coords, np.tile(list(CTimaging.spacing), (len(comp.coords),1))) #TODO: Is that equivalent?!? Especially the separate parts comp.coords and np.tile ...
             n_samples = X.shape[0]
             X_transformed = pca.fit_transform(X)
             X_centered = X - np.mean(X, axis = 0) # Is this necessary?
@@ -158,20 +158,25 @@ class LeadWorks:
             if (latent[0] > LAMBDA_1 and latent[0]/np.mean(latent[1:]) > 10
                     and lowerAxesLength[1] / (lowerAxesLength[0] + .001) < 8):
                 #elecIdxs.append(componentIdxs[i])
-                elecIdxs.append(comp)
+                detected_leads.append(comp)
 
-        nElecs = len(elecIdxs)
-        print('... of which PaCER algorithm guessed {} being electrodes.'.format(nElecs))
-        if nElecs == 0:
+        print('... of which PaCER algorithm guessed {} being electrodes.'.format(len(detected_leads)))
+        if not detected_leads:
             if threshold < 3000:
                 print('Trying a higher threshold to ensure leads are detected.')
                 leadPointcloudStruct, brainMask = self.electrodeEstimation(fileID, CTimaging, brainMask, threshold)
-                return
+                return leadPointcloudStruct, brainMask
             else:
                 print('Even after changing thresholds repeatedly, the algorithms could not detect any leads. Please '
                       'double-check the input carefully ')
                 return
 
+        elecsPointcloudStruct = []
+        for leadID in detected_leads:
+
+            # PixelIdxList = leadID.coords??
+            # TODO: get transformation matrix, from Affine??
+            pass
    # elecsPointcloudStruct = struct();
 
     #for i=1:nElecs
@@ -191,6 +196,7 @@ class LeadWorks:
     #elecMask(elecsPointcloudStruct(i).pixelIdxs) = true; # TODO: make sure we don't have to Swap i,j to X,Y here!
     #elecsPointcloudStruct(i).binaryMaskImage = elecMask;
     #end
+        return leadPointcloudStruct, brainMask
 
 
     def connected_objects(self, data_array, connectivity):
