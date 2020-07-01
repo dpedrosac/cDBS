@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import utils.HelperFunctions as HF
-from tests.GUIdcm2nii import MainGuiDcm2nii
+from utils.GUIdcm2nii import MainGuiDcm2nii
 from utils.settingsRenameFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
