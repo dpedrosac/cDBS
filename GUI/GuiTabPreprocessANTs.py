@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-
 import yaml
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView

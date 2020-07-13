@@ -2,16 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import os
-import glob
-import re
-
 import yaml
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
-
 import utils.HelperFunctions as HF
-import utils.preprocANTSpy as ANTspy
-from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
 from GUI.GuiTwoLists_generic import TwoListGUI
 import utils.preprocLeadCT as LeadDetectionRoutines
 import private.allToolTips as setToolTips

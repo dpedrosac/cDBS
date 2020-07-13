@@ -8,7 +8,6 @@ import time
 import utils.HelperFunctions as HF
 import multiprocessing as mp
 import glob
-import antspynet
 import numpy as np
 import shutil
 from itertools import groupby
@@ -331,6 +330,7 @@ class ProcessANTSpy:
 
         skull_strip = 1
         if skull_strip and 't1' in moving_sequence:
+            import antspynet
             filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii')
 
             brainmask = antspynet.brain_extraction(image=registered_images['warpedmovout'], verbose=False)
