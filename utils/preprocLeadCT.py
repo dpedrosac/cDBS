@@ -6,6 +6,7 @@ import re
 import ants
 import scipy
 import math
+import time
 import utils.HelperFunctions as HF
 import multiprocessing as mp
 import glob
@@ -113,15 +114,15 @@ class LeadWorks:
 
         areas = []
         [areas.append(a) for a in ccProps if a.area >= minVoxelNumber and a.area <= maxVoxelNumber]
-
-        # TODO some feedback is needed here, saying how many artifacts/leads were detected
+        print('Guessing {} of them being DBS-leads'.format(str(len(areas))))
 
         leadPointcloudStruct = self.electrode_count(fileID, CTimaging, brainMask, threshold, areas)
         for leadPoints in leadPointcloudStruct:
             initialPoly, tPerMm, skeleton, totalLengthMm = self.electrodePointCloudModelEstimate(leadPoints)
             elecModels, intensityProfiles, skelSkelmms = \
-                self.refitElec(self, initialPoly, leadPoints["points"], leadPoints["pixelValues"])
+                self.refitElec(initialPoly, leadPoints["points"], leadPoints["pixelValues"])
             #TODO: here matrices MUST be appended
+
 
     ## FIRST PART, detect leads
     def electrode_count(self, fileID, CTimaging, brainMask, threshold, areas):
@@ -224,7 +225,7 @@ class LeadWorks:
 
         # Filter skeleton for valid points
         filter = sumInPlane < np.median(sumInPlane) /1.5
-        if sum(filter) > 0:
+        if sum(filter) > 0: # TODO: in the original PaCer script this is only done when Max-off model is higher than a certain value
             print('Applied axial skeleton filter due to low intensity planes')
             skeleton = np.squeeze(skeleton[np.where(~filter) ,:])
 
@@ -242,7 +243,7 @@ class LeadWorks:
 
         return r3polynomial, tPerMm, skeleton, totalLengthMm
 
-    def refitElec(self, initialPoly, pointCloud, voxelValues, **kwargs):
+    def refitElec(self, initialPoly, pointCloud, voxelValues):
         """"""
         from scipy.interpolate import griddata
         # General options required for the function TODO: change this to lowercase as these are no static/global variables
@@ -262,16 +263,38 @@ class LeadWorks:
         oneMmEqivStep = 1 / totalLengthMm[0]
         STEP_SIZE = Z_RESOLUTION * oneMmEqivStep
         interpolationF = scipy.interpolate.LinearNDInterpolator(points=pointCloud, values=voxelValues)
-        skeleton2nd, _, _, _ = self.oor(initialPoly, step_size=STEP_SIZE, XGrid, YGrid, interpolationF)
-        refittedR3Poly2nd, _ = self.fitParamPolyToSkeleton(skeleton2nd, degree=8);
+        print("First run:")
+        skeleton2nd, _, _, _, _ = self.oor(initialPoly, STEP_SIZE, XGrid, YGrid, interpolationF)
+        print("Second run:") # TODO: it would make sense to make the output more informative at this point
+        refittedR3Poly2nd, _ = self.fitParamPolytoSkeleton(np.array(skeleton2nd), degree=8)
 
         skeleton3rd, medIntensity, orthIntensVol, _, skelScaleMm = self.oor(refittedR3Poly2nd, STEP_SIZE, XGrid, YGrid,
                                                                             interpolationF)
         dat1 = self.polyArcLength3(initialPoly)
         dat2 = self.polyArcLength3(refittedR3Poly2nd)
 
-        print("\n 1st pass electrode length within Brain Convex Hull {}mm".format(dat1))
-        print("\n 2nd pass electrode length within Brain Convex Hull {}mm".format(dat2))
+        print("\n\t1st pass electrode length within Brain Convex Hull {:.4}mm".format(dat1[0]))
+        print("\t2nd pass electrode length within Brain Convex Hull {:.4}mm".format(dat2[0]))
+
+        filterWidth = (0.25 / Z_RESOLUTION) + 1
+        filteredIntensity = scipy.ndimage.filters.uniform_filter1d(medIntensity, size=int(filterWidth))
+        filterIdxs = np.where(skelScaleMm <= LIMIT_CONTACT_SEARCH_MM)
+
+        peakLocs, peakWaveCenters, peakValues, threshIntensityProfile, threshold, contactAreaCenter, contactAreaWidth, \
+        xrayMarkerAreaCenter, xrayMarkerAreaWidth = self.getIntensityPeaks(filteredIntensity, skelScaleMm, filterIdxs)
+
+        detection_method = 'contactAreaCenter' # TODO: include this part in the configuration
+        if detection_method == 'peakWaveCenters':
+            contactPositions = peakWaveCenters
+        else:
+            contactPositions = peakLocs
+
+        try:
+            pass
+        #    electrodeInfo, dataModelPeakRMS = determineElectrodeType(contactPositions)
+        except KeyError:
+            print('Falling back to contact detection method: contactAreaCenter')
+            detection_method == contactAreaCenter
 
         #return refitReZeroedElecMod, filteredIntensity, skelScaleMm
 
@@ -323,21 +346,23 @@ class LeadWorks:
 
     def oor(self, r3Poly, step_size, xGrid, yGrid, interpolationF):
         """"""
+
         SND_THRESH = 1500
-        arcLength = self.polyArcLength3(r3Poly);
+        arcLength = self.polyArcLength3(r3Poly)
         oneMmEqivStep = 1 / arcLength[0]
         lookahead = 3 * oneMmEqivStep
         regX, regY, regZ = r3Poly.T
         evalAtT = np.arange(start=-lookahead, stop=1, step=step_size)
         orthogonalSamplePoints, improvedSkeleton, avgIntensity, medIntensity, sumIntensity = [[] * i for i in range(5)]
-        evalAtT = np.arange(start=-lookahead, stop=1, step=step_size)
         orthSamplePointsVol = np.zeros(r3Poly.shape[1]* len(xGrid) ** 2 * len(evalAtT)).reshape(r3Poly.shape[1],
                                                                                          len(xGrid) ** 2, len(evalAtT))
         orthIntensVol = np.zeros(xGrid.shape[0] * xGrid.shape[1] * len(evalAtT)).reshape(xGrid.shape[0], xGrid.shape[1],
                                                                                          len(evalAtT))
-
+        print("Interpolating orthogonal Sample Points.")
+        HF.LittleHelpers.printProgressBar(0, len(evalAtT), prefix='Progress:', suffix='Complete', length=50)
         for ind, evalAt in enumerate(evalAtT):
-            # TODO: include a progressbar here
+            time.sleep(.01)
+            HF.LittleHelpers.printProgressBar(ind + 1, len(evalAtT), prefix='Progress:', suffix='Complete', length=50)
             x_d = np.polyval(np.polyder((regX)), evalAt)
             y_d = np.polyval(np.polyder((regY)), evalAt)
             z_d = np.polyval(np.polyder((regZ)), evalAt)
@@ -361,8 +386,10 @@ class LeadWorks:
             intensitiesNanZero[intensities < SND_THRESH] = 0
 
             # determine new skel point after rethresholding
-            skelPoint = orthogonalSamplePoints * intensitiesNanZero / sum(intensitiesNanZero)
-            if np.any(np.isnan(skelPoint)): # TODO needs check with original Matlab Code in order to ensure validity
+            with np.errstate(divide='ignore', invalid='ignore'):
+                skelPoint = orthogonalSamplePoints @ intensitiesNanZero / sum(intensitiesNanZero)
+
+            if np.any(np.isnan(skelPoint)):
                 evalAtT[ind] = np.nan
                 continue
             else:
@@ -370,19 +397,69 @@ class LeadWorks:
                 sumIntensity.append(np.nansum(intensitiesNanZero)) # sumIntensity[ind] = np.nansum(intensitiesNanZero)
                 medIntensity.append(np.nanmedian(intensities)) # medIntensity[ind] = np.nanmedian(intensities)
 
-                improvedSkeleton.append(skelPoint) #improvedSkeleton[ind,:] = skelPoint #  # ok<AGROW>
-                intensityMap = np.reshape(intensitiesNanZero, (xGrid.shape[0], xGrid.shape[1]))
-                orthIntensVol[:,:, ind] = intensityMap
+                improvedSkeleton.append(list(skelPoint))
+                orthIntensVol[:,:, ind] = np.reshape(intensitiesNanZero, (xGrid.shape[0], xGrid.shape[1],))
 
-            lowerLimits = np.zeros(shape=(len(evalAtT[~np.isnan(evalAtT)])))
-            upperLimits = evalAtT[~np.isnan(evalAtT)]
-            lowerLimits[upperLimits < 0] = upperLimits[upperLimits < 0]
-            upperLimits[upperLimits < 0] = 0
-            skelScaleMm = self.polyArcLength3(r3Poly, lowerLimit=lowerLimits, upperLimit=upperLimits)
-            skelScaleMm = np.array(skelScaleMm)
-            skelScaleMm[lowerLimits < 0] = -skelScaleMm[lowerLimits < 0]
+        lowerLimits = np.zeros(shape=(len(evalAtT[~np.isnan(evalAtT)])))
+        upperLimits = evalAtT[~np.isnan(evalAtT)]
+        lowerLimits[upperLimits < 0] = upperLimits[upperLimits < 0]
+        upperLimits[upperLimits < 0] = 0
+        skelScaleMm = self.polyArcLength3(r3Poly, lowerLimit=lowerLimits, upperLimit=upperLimits)
+        skelScaleMm = np.array(skelScaleMm)
+        skelScaleMm[lowerLimits < 0] = -skelScaleMm[lowerLimits < 0]
 
         return improvedSkeleton, medIntensity, orthIntensVol, orthSamplePointsVol, skelScaleMm
+
+    def getIntensityPeaks(self, filteredIntensity, skelScaleMm, filterIdxs):
+        """"""
+        from scipy.signal import find_peaks
+        from scipy.ndimage import label
+
+        peaks, properties = find_peaks(filteredIntensity[filterIdxs],
+                                       distance=1.4, height=1.1*np.nanmean(filteredIntensity),
+                                       prominence=.01 * np.nanmean(filteredIntensity))
+        xrayMarkerAreaWidth, xrayMarkerAreaCenter  = [[] * i for i in range(2)]
+        try:
+            threshold = min(filteredIntensity[peaks[0:4]]) - (min(properties["prominences"][0:4]) / 4)
+            threshIntensityProfile = np.minimum(filteredIntensity, threshold)
+            contactSampleLabels = label(~(threshIntensityProfile[filterIdxs] < threshold))
+            values = self.accumarray(skelScaleMm[filterIdxs], contactSampleLabels[0])
+            counts = np.bincount(contactSampleLabels[0])
+            peakWaveCenters = values[1:5] / counts[1:5] # index 0 is the "zero label"
+        except:
+            print("peakWaveCenter detection failed. Returing peaksLocs in peakWaveCenters.")
+            peakWaveCenters = skelScaleMm[peaks]
+            threshIntensityProfile = filteredIntensity
+            threshold = np.nan
+
+        # Detect 'contact area' as fallback for very low SNR signals where no single contacts are visible
+        thresholdArea = np.mean(filteredIntensity[filterIdxs])
+        threshIntensityProfileArea = np.minimum(filteredIntensity, thresholdArea)
+        contactSampleLabels = label(~(threshIntensityProfileArea[filterIdxs] < thresholdArea))
+        values = self.accumarray(skelScaleMm[filterIdxs], contactSampleLabels[0])
+        counts = np.bincount(contactSampleLabels[0])
+        contactAreaCenter = values[1] / counts[1] # index 0 is the "zero label", index 2( value 1) is the contact region, index 3 (value 2) might be an X - Ray obaque arker
+
+        idxs = np.where(contactSampleLabels[0] + 1 == 2)
+        contactAreaWidth = np.abs(skelScaleMm[idxs[0][0]] - skelScaleMm[idxs[0][-1]])
+        if (np.max(contactSampleLabels[0]) > 1):
+            print('\tMultiple metal areas found along electrode. Possibly an electrode type with addtional X-Ray marker!')
+            xrayMarkerAreaCenter = values[2] / counts[2] # index 1 is the "zero label", index 2  (value 1) is the contact region, index 3 (value 2) might be an X-Ray obaque arker
+            idxs = np.where(contactSampleLabels[0] + 1 == 3)
+            xrayMarkerAreaWidth = np.abs(skelScaleMm[idxs[0][0]] - skelScaleMm[idxs[0][-1]])
+
+        if self.debug:
+            from matplotlib import pyplot as plt
+
+            plt.plot(skelScaleMm[filterIdxs], filteredIntensity[filterIdxs])
+            plt.scatter(skelScaleMm[peaks], filteredIntensity[peaks], edgecolors='red')
+            plt.plot(skelScaleMm[filterIdxs], threshIntensityProfileArea[filterIdxs])
+            plt.scatter(peakWaveCenters, [threshold]*4)
+            plt.grid(color='grey', linestyle='-', linewidth=.25)
+
+        return peaks, peakWaveCenters, properties, threshIntensityProfile, threshold, contactAreaCenter, \
+               contactAreaWidth, xrayMarkerAreaCenter, xrayMarkerAreaWidth
+
 
     @staticmethod
     def connected_objects(data_array, connectivity):
@@ -390,12 +467,14 @@ class LeadWorks:
         replacing Mathworks bwconncomp.m function https://www.mathworks.com/help/images/ref/bwconncomp.html"""
         import cc3d
 
+        # TODO move this to helper functions
         labels_out = cc3d.connected_components(np.array(data_array), connectivity=connectivity)
         return labels_out
 
     @staticmethod
     def sphere(diameter):
         """function defining binary matrix which represents a 3D sphere which may be used as structuring element"""
+        # TODO move this to helper functions
 
         struct = np.zeros((2 * diameter + 1, 2 * diameter + 1, 2 * diameter + 1))
         x, y, z = np.indices((2 * diameter + 1, 2 * diameter + 1, 2 * diameter + 1))
@@ -458,3 +537,58 @@ class LeadWorks:
             arcLength.append(quad(f_t, lowerLimit[k], upperLimit[k])[0])
 
         return arcLength
+
+    @staticmethod
+    def accumarray(a, accmap):
+
+        ordered_indices = np.argsort(accmap)
+
+        ordered_accmap = accmap[ordered_indices]
+
+        _, sum_indices = np.unique(ordered_accmap, return_index=True)
+
+        cumulative_sum = np.cumsum(a[ordered_indices])[sum_indices - 1]
+
+        result = np.empty(len(sum_indices), dtype=a.dtype)
+        result[:-1] = cumulative_sum[1:]
+        result[-1] = cumulative_sum[0]
+
+        result[1:] = result[1:] - cumulative_sum[1:]
+
+        return result
+
+    @staticmethod
+    def determineElectrodeType(peakDistances):
+        """gets the most suitable electrode type based on the euclidean distance between detected and specified
+        peaks in the collected data. Data should should be provided in the form of the file ‘electrodeGeometries.mat’."""
+        import scipy.io as spio
+
+        electrodeGeometries = spio.loadmat(os.path.join(ROOTDIR, 'ext', 'PaCER', 'electrodeGeometries.mat'),
+                                           squeeze_me=True, simplify_cells=True)
+        electrodeGeometries = electrodeGeometries["electrodeGeometries"]
+
+        distances, rms = [np.zeros(len(electrodeGeometries)) for _ in range(2)]
+
+        for idx, geoms in enumerate(electrodeGeometries):
+            try:
+                distances[idx] = np.linalg.norm(np.diff(peakDistances) - geoms["diffsMm"])
+                rms[idx] = np.sqrt(np.mean(np.diff(peakDistances) - geoms["diffsMm"])**2)
+            except ValueError:
+                distances[idx] = float('inf')
+                rms[idx] = float('inf')
+
+        if np.all(np.isinf(distances)):
+            print('determineElectrodeType: Could NOT detect electrode type! Electrode contact detection might by '
+                  'flawed. To low image resolution (to large slice thickness)!? Set electrode type manually '
+                  'if you want to continue with this data')
+            elecStruct = electrodeGeometries[-1]
+
+            return elecStruct
+
+        d = np.min(distances)
+        idx = np.argmin(distances)
+        rms = rms[np.where(distances==d)]
+        print('determineElectrodeType: data to model peak/contact spacing RMS distance is {} mm'. format(str(rms)))
+        elecStruct = electrodeGeometries[idx]
+
+        return elecStruct
