@@ -7,8 +7,11 @@ import warnings
 import sys
 import re
 import subprocess
+import numpy as np
 from PyQt5.QtWidgets import QMessageBox
 import private.CheckDefaultFolders as LocationCheck
+from itertools import groupby
+from operator import itemgetter
 
 class LittleHelpers:
     def __init__(self, _debug=False):
@@ -144,7 +147,7 @@ class LittleHelpers:
         """creates folder if not existent"""
 
         if not os.path.isdir(foldername):
-                os.mkdir(foldername)
+            os.mkdir(foldername)
 
 
 # General functions: message box, find (sub-)folders in a directory,
@@ -196,12 +199,12 @@ def list_files_in_folder(inputdir, contains='', suffix='nii', entire_path = Fals
     import glob
 
     if subfolders:
-#        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(os.path.join(inputdir + '/**/*.' + suffix),
-#                                                                     recursive=True)]
+        #        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(os.path.join(inputdir + '/**/*.' + suffix),
+        #                                                                     recursive=True)]
         allfiles_in_folder = glob.glob(os.path.join(inputdir + '/**/*.' + suffix), recursive=True)
 
     else:
-#        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(inputdir + '/*.' + suffix)]
+        #        allfiles_in_folder = [os.path.split(x)[1] for x in glob.glob(inputdir + '/*.' + suffix)]
         allfiles_in_folder = glob.glob(inputdir + '/*.' + suffix)
 
     if not contains:
@@ -233,7 +236,7 @@ def display_files_in_viewer(inputdir, regex2include, regex2exclude, selected_sub
 
     if not selected_subjects:
         msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
-                   title="No subject selected")
+                title="No subject selected")
         return
     elif len(selected_subjects) > 1:
         msg_box(text="Please select only one folder to avoid loading too many images",
@@ -284,3 +287,39 @@ def resampleANTsImaging(mm_spacing, ANTsImageObject, file_id, method):
         resampled_image = ANTsImageObject
 
     return resampled_image
+
+def inner_join(a, b):
+    """adapted from: https://stackoverflow.com/questions/31887447/how-do-i-merge-two-lists-of-tuples-based-on-a-key"""
+
+    L = a + b
+    L.sort(key=itemgetter(1))  # sort by the first column
+    for _, group in groupby(L, itemgetter(1)):
+        row_a, row_b = next(group), next(group, None)
+        if row_b is not None:  # join
+            yield row_b[0:1] + row_a  # cut 1st column from 2nd row
+
+def sphere(diameter):
+    """function defining binary matrix which represents a 3D sphere which may be used as structuring element"""
+
+    struct = np.zeros((2 * diameter + 1, 2 * diameter + 1, 2 * diameter + 1))
+    x, y, z = np.indices((2 * diameter + 1, 2 * diameter + 1, 2 * diameter + 1))
+    mask = (x - diameter) ** 2 + (y - diameter) ** 2 + (z - diameter) ** 2 <= diameter ** 2
+    struct[mask] = 1
+
+    return struct.astype(np.bool)
+
+
+def accumarray(a, accmap):
+    """ from https://stackoverflow.com/questions/16856470/is-there-a-matlab-accumarray-equivalent-in-numpy"""
+
+    ordered_indices = np.argsort(accmap)
+    ordered_accmap = accmap[ordered_indices]
+    _, sum_indices = np.unique(ordered_accmap, return_index=True)
+    cumulative_sum = np.cumsum(a[ordered_indices])[sum_indices - 1]
+
+    result = np.empty(len(sum_indices), dtype=a.dtype)
+    result[:-1] = cumulative_sum[1:]
+    result[-1] = cumulative_sum[0]
+    result[1:] = result[1:] - cumulative_sum[1:]
+
+    return result

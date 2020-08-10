@@ -90,7 +90,7 @@ class ProcessANTSpy:
               '{:.1f} secs.'.format(len(subjects), time.time() - start_multi))
 
     def N4BiasCorrection_multiprocessing(self, file2rename, subj, input_folder, status):
-        """Does the Bias correction taken advantage of the multicores, so that multiple subjects can be processed in
+        """Does the Bias correction taking advantage of the multicores, so that multiple subjects can be processed in
         parallel; For that a list of tuples including the entire filename and the subject to be processed are entered"""
 
         status.put(tuple([mp.current_process().name, subj, os.path.split(file2rename)[1]]))
@@ -462,6 +462,7 @@ class ProcessANTSpy:
     @staticmethod
     def inner_join(a, b):
         """adapted from: https://stackoverflow.com/questions/31887447/how-do-i-merge-two-lists-of-tuples-based-on-a-key"""
+        #TODO: put this into helper functions
         L = a + b
         L.sort(key=itemgetter(1))  # sort by the first column
         for _, group in groupby(L, itemgetter(1)):

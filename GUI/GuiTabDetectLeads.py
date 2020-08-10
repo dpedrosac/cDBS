@@ -175,7 +175,7 @@ class GuiTabDetectLeads(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                LeadDetectionRoutines.LeadWorks().LeadDetection(subjects=self.selected_subj_ANT)
+                LeadDetectionRoutines.LeadWorks().PaCER_script(subjects=self.selected_subj_ANT)
 
     def run_PreferencesLeadDetection(self):
         """change the settings for the ANTs routines, that is N4BiasCorrection and registration of CT/MRI """
