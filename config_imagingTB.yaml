@@ -6,6 +6,13 @@ folders:
   path2slicer: ''
   prefix: subj
   rootdir: /media/storage/cDBS
+lead_detection:
+  PaCER:
+    detection_method: contactAreaCenter
+    lambda: 25
+    lead_type: BSc-2201 (non-direct.)
+    probabilistic_mask: 'yes'
+    threshold: '1500'
 preprocess:
   ANTsN4:
     bspline-fitting: 200
@@ -16,7 +23,7 @@ preprocess:
     - 50
     denoise: 'no'
     dti_prefix: ep2d
-    prefix: bc_
+    prefix: ''
     shrink-factor: 4
     threshold: 1.0e-07
   dcm2nii:

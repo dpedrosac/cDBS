@@ -222,3 +222,21 @@ def DiffPrefix():
 
     return HF.LittleHelpers.split_lines(text)
 
+# preprocLeadCT
+def PaCER_MetalThreshold():
+    text = "The threshold used to scan for artifacts which may correspond to a lead within the mask of the brain. " \
+           "In case none is found, this is lowered automatically"
+
+    return HF.LittleHelpers.split_lines(text)
+
+def PaCER_Lambda():
+    text = "Not sure what it does!! Please double check"
+
+    return HF.LittleHelpers.split_lines(text)
+
+def ProbabilisticMask():
+    text = 'Defines whether or not use probablisitic mask. With the use of ANTs for registration and segmentation, ' \
+           ' a probabilistic mask is created via ANTsPyNet routines. if set to "yes", the 95th percentile is used, ' \
+           ' otherwise data is subtracted from the edges with a sphere analog to the procedure in Lead-DBS'
+
+    return HF.LittleHelpers.split_lines(text)

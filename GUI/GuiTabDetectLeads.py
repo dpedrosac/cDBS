@@ -7,13 +7,13 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 import utils.HelperFunctions as HF
 from GUI.GuiTwoLists_generic import TwoListGUI
+from utils.settingsLeadDetection import GuiLeadDetection
 import utils.preprocLeadCT as LeadDetectionRoutines
 import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
 
 class GuiTabDetectLeads(QWidget):
-    """Tab which shows the options for preprocessing data, that is N4BiasfieldCorrection and Coregestiering of pre- and
-     postoperative imaging"""
+    """Tab with options for detecting leads within the (pre-processed and registered) CT imaging"""
 
     def __init__(self, parent=None, ROOTDIR=''):
         super(GuiTabDetectLeads, self).__init__(parent)
@@ -23,7 +23,7 @@ class GuiTabDetectLeads(QWidget):
         if not ROOTDIR:
             from dependencies import ROOTDIR
 
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR) # load configuration file/options from file
         if os.path.isdir(self.cfg["folders"]["nifti"]):
             self.niftidir = self.cfg["folders"]["nifti"]
         else:
@@ -78,7 +78,7 @@ class GuiTabDetectLeads(QWidget):
         self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabLeadDetect)
         self.btn_QC_LeadDetect = QPushButton('Check lead detection \nin viewer')
         self.btn_QC_LeadDetect.setToolTip(setToolTips.checkN4BiasCorrectionresults())
-        self.btn_QC_LeadDetect.clicked.connect(self.CompareLeadDetection)
+        self.btn_QC_LeadDetect.clicked.connect(self.VisualiseLeadDetection)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
 #        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
 
@@ -162,37 +162,33 @@ class GuiTabDetectLeads(QWidget):
 
     # Separate functions/GUIs that may be initialised here
     def run_LeadDetectionPaCER(self):
-        """wrapper to start the lead detection according to the PaCER algorithm which can be found under:
+        """wrapper to start lead detection with PaCER routines translated to python; original data can be found at:
         https://github.com/adhusch/PaCER/"""
 
-        if not self.selected_subj_ANT:
-            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process. "
-                            "(For this option, numerous folders are possible for batch processing)",
-                       title="No subject selected")
+        if len(self.selected_subj_ANT) > 1:
+            HF.msg_box(text="Please select only one subject, as multiprocessing for lead detection is not intended",
+                                     title="Too many subjects selected")
+            return
         else:
-            msg = "Are you sure you want to process all NIFTI-files in the following folders:\n\n" \
+            msg = "Are you sure you want to process the following subject:\n\n" \
                   "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
-            ret = QMessageBox.question(self, 'MessageBox', msg,
-                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            ret = QMessageBox.question(self, 'MessageBox', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
                 LeadDetectionRoutines.LeadWorks().PaCER_script(subjects=self.selected_subj_ANT)
 
     def run_PreferencesLeadDetection(self):
-        """change the settings for the ANTs routines, that is N4BiasCorrection and registration of CT/MRI """
-        HF.msg_box(text='Not implemented yet!', title='Warning')
-        #self.ANTsSettings = GuiSettingsNiftiAnts()
-        #self.ANTsSettings.show()
+        """change settings for the Lead detection routines, that is settings for PaCER """
+        self.ANTsSettings = GuiLeadDetection()
+        self.ANTsSettings.show()
 
-    def CompareLeadDetection(self, include_dti=False):
+    def VisualiseLeadDetection(self):
         """wrapper to start comparisons between pre- and post-processed images after N4BiasCorrection"""
 
         if not self.selected_subj_ANT:
-            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
-                       title="No subject selected")
+            HF.msg_box(text="No folder selected. To proceed, please select at least one.", title="No subject selected")
             return
         elif len(self.selected_subj_ANT) > 1:
-            HF.LittleHelpers.msg_box(text="Please select only one folder to avoid loading too many images",
-                                     title="Too many subjects selected")
+            HF.msg_box(text="Please select only one subj.", title="Too many subjects selected")
             return
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0]) # Is the index necessary

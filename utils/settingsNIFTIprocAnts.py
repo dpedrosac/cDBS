@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox, QComboBox
 from dependencies import ROOTDIR
 
+
 class GuiSettingsNiftiAnts(QWidget):
     """ Helper GUI, which enables to change the settings of the different steps with the ANts Toolbox to analyse NIFTI
       data"""
@@ -135,10 +136,10 @@ class GuiSettingsNiftiAnts(QWidget):
         # ==============================    Create Content for Right Upper Box   ==============================
         self.optionboxRegistration = QGroupBox('ImageRegistration')
         self.settings_list2 = QVBoxLayout(self.optionboxRegistration)
-        #self.settings_list2.addLayout(lay1)
+        # self.settings_list2.addLayout(lay1)
 
         self.labelPrefixRegistration = QLabel('Registration prefix?\t')
-        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        # self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
         self.lineEditPrefixRegistration = QLineEdit()
 
         lay8 = QHBoxLayout()
@@ -147,7 +148,7 @@ class GuiSettingsNiftiAnts(QWidget):
         lay8.addStretch()
 
         self.labelPrefixNormalisation = QLabel('Normalisation prefix?\t')
-        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        # self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
         self.lineEditPrefixNormalisation = QLineEdit()
 
         lay9 = QHBoxLayout()
@@ -167,7 +168,7 @@ class GuiSettingsNiftiAnts(QWidget):
         self.labelResampleMethod = QLabel('Resampling method?\t')
         self.labelResampleMethod.setToolTip(setToolTips.ResampleMethod())
         self.btngroup_ResampleMethod = QButtonGroup()
-        self.rbtnResample0 = QRadioButton("0") #one of 0 (linear), 1 (nearest neighbor), 2 (gaussian), 3 (windowed sinc), 4 (bspline)
+        self.rbtnResample0 = QRadioButton("0")  # 0 (lin.), 1 (near. neighb.), 2 (gauss.), 3 (window. sinc), 4 (bspline)
         self.rbtnResample1 = QRadioButton("1")
         self.rbtnResample2 = QRadioButton("2")
         self.rbtnResample3 = QRadioButton("3")
@@ -209,7 +210,7 @@ class GuiSettingsNiftiAnts(QWidget):
         lay12.addStretch()
 
         self.labelRegistrationMethod = QLabel('Registration method?\t')
-        #self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
+        # self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
         self.lineRegistrationMethod = QComboBox()
         allowable_tx = [
             "SyNBold",
@@ -259,13 +260,13 @@ class GuiSettingsNiftiAnts(QWidget):
         lay14.addStretch()
 
         self.labelNormalisationTemplate = QLabel('Normalisation template?\t')
-        #self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
+        # self.labelRegistrationMethod.setToolTip(setToolTips.LabelResampleImages())
         self.lineTemplatesAvailable = QComboBox()
-        template_list = ['mni_icbm152_nlin_asym_09b']
         [self.lineTemplatesAvailable.addItem(os.path.split(x)[1]) for x in
          glob.glob(os.path.join(ROOTDIR, 'ext', 'templates' + '/*'))]
         idx_template = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["normalisation"]["template_image"],
-                                                          QtCore.Qt.MatchFixedString)
+                                                            QtCore.Qt.MatchFixedString)
+
         if idx_template >= 0:
             self.lineRegistrationMethod.setCurrentIndex(idx_template)
         self.lineTemplatesAvailable.currentTextChanged.connect(self.comboChangedNormalisation)
@@ -276,7 +277,7 @@ class GuiSettingsNiftiAnts(QWidget):
         lay15.addStretch()
 
         self.labelNormalisationSequences = QLabel('Sequences to normalise?\t')
-        #self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
+        # self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
         self.lineEditNormalisationSequences = QLineEdit()
 
         lay16 = QHBoxLayout()
@@ -357,7 +358,7 @@ class GuiSettingsNiftiAnts(QWidget):
             self.lineEditBSplineDist.setText(str(self.cfg["preprocess"]["ANTsN4"]["bspline-fitting"]))
             self.lineEditConv1.setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][0]))
             self.lineEditConv2.setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][1]))
-            self.lineEditConv3 .setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][2]))
+            self.lineEditConv3.setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][2]))
             self.lineEditConv4.setText(str(self.cfg["preprocess"]["ANTsN4"]["convergence"][3]))
             self.lineEditTolerance.setText(str(self.cfg["preprocess"]["ANTsN4"]["threshold"]))
             self.lineEditDiffPrefix.setText(str(self.cfg["preprocess"]["ANTsN4"]["dti_prefix"]))
@@ -367,7 +368,6 @@ class GuiSettingsNiftiAnts(QWidget):
             self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
             self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
             self.lineEditNormalisationSequences.setText(str(self.cfg["preprocess"]["normalisation"]["sequences"]))
-
 
     def closeEvent(self, event):
         """saves the settings found here as a yaml file which may be loaded the next time as the configuration used"""
@@ -409,7 +409,8 @@ class GuiSettingsNiftiAnts(QWidget):
             self.lineRegistrationMethod.setCurrentIndex(idx_method)
 
         idx_template = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["normalisation"]["template_image"],
-                                                          QtCore.Qt.MatchFixedString)
+                                                            QtCore.Qt.MatchFixedString)
+
         if idx_template >= 0:
             self.lineRegistrationMethod.setCurrentIndex(idx_template)
         self.lineTemplatesAvailable.currentTextChanged.connect(self.comboChangedNormalisation)

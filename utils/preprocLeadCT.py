@@ -63,17 +63,10 @@ class LeadWorks:
         #    pass
 
         fileID = list(HF.inner_join(file_id_brainMask, file_id_CTimaging))
-        # TODO Here the code for the multiprocessing should be included
-        leadPointCloudStruct = self.electrodeEstimation(fileID[0], flag)
+        elecModels, intensityProfiles, skelSkalms = self.electrodeEstimation(fileID[0], flag)
 
-    def PaCER_multiprocessing(self, fileID, CTimaging, brainMask, flag, status):
-        """Does the lead detection taking advantage of the multicores, so that multiple subjects can be processed in
-        parallel; For that a list of tuples including the entire filename and the subject to be processed are entered"""
-        # TODO: needs to be setup
-        # leadPointcloudStruct = self.electrodeEstimation(fileID["CTimaging"], CTimaging, brainMask, flag)
-        pass
 
-    def electrodeEstimation(self, fileID, flag, threshold=''):
+    def electrodeEstimation(self, fileID, flag, threshold=1500):
         """ estimates the electrode mask according to
         https://github.com/adhusch/PaCER/blob/master/src/Functions/extractElectrodePointclouds.m"""
 
@@ -91,19 +84,12 @@ class LeadWorks:
             warnings.warn('\tSlice thickness > 0.7 mm! reliable contact detection not guaranteed. However, for certain '
                           'lead types w/ large contacts, it might work.')
 
-        if not threshold:
-            threshold = METAL_THRESHOLD
-            print('\tRoutine estimation of number and location of DBS-leads @ routine threshold ({})'.format(threshold))
-        else:
-            print('\tEstimation of number and location of DBS-leads \w modified threshold ({})'.format(threshold))
-
         print('\tThresholding {}: {} for content with HU>{}'.format(fileID[2], os.path.split(fileID[0])[1], threshold))
+        brainMask = np.zeros(shape=CTimaging.shape, dtype=bool)
         if not self.debug:
-            brainMask = np.zeros(shape=CTimaging.shape, dtype=bool)
-            brainMask[brainMask_prob.abs() > .97] = True
+            brainMask[brainMask_prob.abs() > .95] = True
         else: # code compatible with debug from PaCER version in Lead-DBS package
             sphere_test = np.array(HF.sphere(math.ceil(3 / max(CTimaging.spacing))))
-            brainMask = np.zeros(shape=CTimaging.shape, dtype=bool)
             brainMask[brainMask_prob.abs() > .5] = True
             brainMask = ndimage.binary_erosion(brainMask, structure=sphere_test).astype(bool) # erosion not necessary due to probabilistic maps and the possibility to change the threshold
 
@@ -114,14 +100,13 @@ class LeadWorks:
 
         # largest connected components of metal inside of brain represents the electrodes
         cc = self.connected_objects(threshold_indices, connectivity=26)
-        print('{} potential metal components were detected within the brain.'.format(np.max(cc)), end=' ') #TODO: this should be continued later with guessing ...
+        print('\t{} potential metal components were detected within the brain.'.format(np.max(cc)), end=' ')
 
         ccProps = regionprops(label_image=cc, intensity_image=None, cache=True, coordinates=None)
         minVoxelNumber = (1.2 * 1.27 / 2) ** 2 * math.pi * 40 / np.prod(CTimaging.spacing) # according to PACER script, 40 mm within brain and 20% partial voluming; where are these values from
         maxVoxelNumber = (3 * 1.27 / 2) ** 2 * math.pi * 80 / np.prod(CTimaging.spacing)   # assuming 80 mm in brain and 300 % partial voluming
 
-        # Guessing areas of interest according to the minimum/maximum voxel number
-        areas = []
+        areas = [] # Guessing areas of interest according to the minimum/maximum voxel number
         [areas.append(a) for a in ccProps if a.area >= minVoxelNumber and a.area <= maxVoxelNumber]
         print('Guessing {} of them being DBS-leads'.format(str(len(areas))))
 
@@ -135,7 +120,8 @@ class LeadWorks:
             intensityProfiles.append(prof)
             skelSkalms.append(skel)
 
-        abc = 'test'
+        return elecModels, intensityProfiles, skelSkalms
+
     # ==============================    PREPROCESSING (1. step)  ==============================
     def identifyLeads(self, fileID, CTimaging, brainMask, threshold, areas):
         """Estimate number of electrodes found using regionprops routine and generate a PointCloud for every lead.
@@ -172,7 +158,8 @@ class LeadWorks:
             else:
                 raise Exception('Even with higher thresholds, no leads could be detected. Double-check input !!')
 
-        transformation_matrix = np.multiply(np.eye(3), [round(f,1) for f in CTimaging.spacing]) # no transformation necessary (see below) therefre identity matrix is used
+        #TODO include transformation matrix from file if selected in options
+        transformation_matrix = np.multiply(np.eye(3), [round(f,1) for f in CTimaging.spacing]) # transformation only necessary if selected in options; otherwise all remains in "ANTs space"
         items = ["pixelList", "elecMask", "points", "pixelValues"]
         CTimagingData = CTimaging.numpy()
         leadpoint_cloudstruct = []
@@ -181,7 +168,7 @@ class LeadWorks:
             leadpoint_cloudstruct.append({k: [] for k in items})
             pixelList = leadID["coords"]
             leadpoint_cloudstruct[i]["pixelList"] = pixelList
-            leadpoint_cloudstruct[i]["points"] = pixelList @ abs(transformation_matrix[:3, :3])
+            leadpoint_cloudstruct[i]["points"] = pixelList #@ abs(transformation_matrix[:3, :3])
             leadpoint_cloudstruct[i]["pixelValues"] = np.array([CTimagingData[tuple(pixelList[i])]
                                                                 for i, k in enumerate(pixelList)])
             elecMask_temp = np.zeros(shape=CTimaging.shape)
@@ -214,7 +201,7 @@ class LeadWorks:
             idx_zplane = np.where(abs(leadPoints["points"][:,-1] - zplaneID) <= tol)
             inPlanePoints = leadPoints["points"][idx_zplane, :]
             if USE_REF_WEIGHTING:
-                inPlaneIntensities = leadPoints["pixelValues"][idx_zplane] #
+                inPlaneIntensities = leadPoints["pixelValues"][idx_zplane].astype('float32') #
                 # next line estimates slice wise centroid weighted by image intensity values (Husch et al. 2015, Section 2.1)
                 skeleton.append(np.squeeze(inPlanePoints).T @ (inPlaneIntensities / np.sum(inPlaneIntensities)))
                 sumInPlane.append(np.sum(inPlaneIntensities))
@@ -224,7 +211,7 @@ class LeadWorks:
         skeleton, sumInPlane  = np.array(skeleton), np.array(sumInPlane)
         filter = sumInPlane < np.median(sumInPlane)/1.5
         if sum(filter) > 0: # # filter skeleton for valid points
-            print('Applied axial skeleton filter due to low intensity planes')
+            print('\tApplied axial skeleton filter due to low intensity planes')
             skeleton = np.squeeze(skeleton[np.where(~filter), :])
 
         if all(skeleton[1, :] == np.zeros(3)):
@@ -256,12 +243,12 @@ class LeadWorks:
         STEP_SIZE = z_resolution * oneMmEqivStep
         interpolationF = scipy.interpolate.LinearNDInterpolator(points=pointCloud, values=voxelValues)
 
-        print("First run:")
+        print("\tFirst run:")
         skeleton2nd, _, _, _, _ = self.oor(initialPoly, STEP_SIZE, XGrid, YGrid, interpolationF)
-        print("Second run:")
+        print("\tSecond run:")
         R3polynomial2nd, _ = self.fitParamPolytoSkeleton(np.array(skeleton2nd), degree=8)
 
-        msg2plot = 'Refitting parametrised polynomial to re-sampled data (2nd run)'
+        msg2plot = '\tRefitting parametrised polynomial to re-sampled data (2nd run)'
         skeleton3rd, medIntensity, orthIntensVol, _, skelScaleMm = self.oor(R3polynomial2nd, STEP_SIZE, XGrid, YGrid,
                                                                             interpolationF, run_information=msg2plot)
         dat1, dat2 = self.polyArcLength3(initialPoly), self.polyArcLength3(R3polynomial2nd)
@@ -300,7 +287,7 @@ class LeadWorks:
                                                squeeze_me=True, simplify_cells=True)
             lead_geometries = lead_geometries["electrodeGeometries"]
 
-            lead_type = 'Boston Vercise Directional' #TODO: put this into configuration file yaml
+            lead_type = 'BSc-2202 (directional)' #TODO: put this into configuration file yaml
             if lead_type == 'unknown':
                 warnings.warn('\tNo lead specification provided, please set lead_type if possible. Meanwhile trying'
                               'to estimate type by width of contact area. Might be wrong, please double-check!')
@@ -326,17 +313,14 @@ class LeadWorks:
             zeroT = self.invPolyArcLength3(R3polynomial2nd,
                                            np.array(contactAreaCenter - np.mean(lead_information["ringContactCentersMm"]))) # calibrate zero
         else:
-            dataModelPeakRMS = 0 #TODO: determineElectrodeType(contact_positions) must be coded
-            if dataModelPeakRMS > 0.3: # TODO the MAX deviation might be a better measure than the RMS?
+            dataModelPeakRMS = 0
+            if dataModelPeakRMS > 0.3: # original comment: "the MAX deviation might be a better measure than the RMS?"
                 print('Switching to model based contact positions because of high RMS '
                       '(Setting useDetectedContactPositions = 0).')
-                useDetectedContactPositions = 0
+                useDetectedContactPositions = 0 # TODO what is the function of this
             zeroT = self.invPolyArcLength3(R3polynomial2nd, contact_positions[0] - lead_information["zeroToFirstPeakMm"])
             refittedContactDistances = contact_positions - (contact_positions[0] - lead_information["zeroToFirstPeakMm"])
 
-            # Refit Poly To Correct Zero Point (lower end of lowest electrode contact)
-            # Determine new "0 Point" == def 1: lower end of the lowest electrode contact i.e. center of lowest
-            # electrode contact  - 0.75 mm in proximal direction for 3389 / 3387, proximal  direction is approximate!
         if (final_degree == 1):
             elecEndT = self.invPolyArcLength3(R3polynomial2nd, np.array(limit_contactsearch_mm))
             spacing = np.linspace(start=zeroT, stop=elecEndT, num=math.floor(totalLengthMm[0]/xy_resolution))
@@ -398,10 +382,10 @@ class LeadWorks:
         stdFittingError = np.std(fittingErrs, axis=0)
         maxFittingError = np.max(fittingErrs, axis=0)
 
-        print('\tMax off-model: {:.4}, Mean off-model: {:.4}\n'.format(maxFittingError, meanFittingError))
+        print('\t\tMax off-model: {:.4}, Mean off-model: {:.4}\n'.format(maxFittingError, meanFittingError))
         if (maxFittingError > 0.35 and maxFittingError > (meanFittingError + 3 * stdFittingError)):
-            print('\tCheck for outliers/make sure chosen polynomial degree is appropriate.\n '
-                  '\tIn most cases selection should be fine.\n')
+            print('\t\tCheck for outliers/make sure chosen polynomial degree is appropriate.\n '
+                  '\t\tIn most cases selection should be fine.\n')
 
         return r3polynomial[0], avgStepsPerMm
 
@@ -409,7 +393,7 @@ class LeadWorks:
         """optimal oblique re-sampling; routine enabling automatic contact detection by creating perpendicular slices
         with respect to the lead """
         if not run_information:
-            run_information = 'Estimating oblique slices which are orthogonal to first-pass electrode'
+            run_information = '\tEstimating oblique slices which are orthogonal to first-pass electrode'
 
         SND_THRESH = 1500
         arcLength = self.polyArcLength3(r3Poly)
@@ -417,7 +401,7 @@ class LeadWorks:
         lookahead = 3 * oneMmEqivStep
 
         poly_coeffs = []
-        for i, coords in enumerate(r3Poly.T):
+        for coords in r3Poly.T:
             poly_coeffs.append(np.polyder(coords))
 
         evalAtT = np.arange(start=-lookahead, stop=1, step=step_size) # create samples of all available datapoints
@@ -453,7 +437,8 @@ class LeadWorks:
                 skelPoint = orthogonalSamplePoints @ intensitiesNanZero / sum(intensitiesNanZero)
 
             if np.any(np.isnan(skelPoint)):
-                evalAtT[ind] = np.nan
+                evalAtT = evalAtT[1:]
+                #evalAtT[ind] = np.nan
                 continue
             else:
                 avgIntensity.append(np.nanmean(intensities)) #avgIntensity[ind] = np.nanmean(intensities)
@@ -546,9 +531,9 @@ class LeadWorks:
                 raise ('There is an accuracy problem here!')
 
         regX, regY, regZ = polyCoeff[:,0],  polyCoeff[:,1],  polyCoeff[:,2]
-        x_d = np.polyder(regX) # TODO: there must be a more elegant way to define these
-        y_d = np.polyder(regY)
-        z_d = np.polyder(regZ)
+        x_d, y_d, z_d = np.polyder(regX), np.polyder(regY), np.polyder(regZ)
+        #y_d = np.polyder(regY)
+        #z_d = np.polyder(regZ)
 
         arcLength = []
         f_t = lambda x: np.sqrt(np.polyval(x_d, x) ** 2 + np.polyval(y_d, x) ** 2 + np.polyval(z_d, x) ** 2)
@@ -557,18 +542,18 @@ class LeadWorks:
 
         return arcLength
 
-    def invPolyArcLength3(self, polyCoeff, arcLength):# see equation (3) in Husch et al. 2018
-        """according to the conditions resumed in the paper, the inverse of the integral (arcLength) can be estimated
-        with the following lines """
+    def invPolyArcLength3(self, polyCoeff, arcLength): # eq. (3) in Husch et al. 2018
+        """according to conditions resumed in paper, inverse of integral (arcLength) can be estimated as follows """
 
         fx_invpolyArc = lambda x, a, coeff: np.abs(a - self.polyArcLength3(coeff, [0], x))
         if len(arcLength.shape) != 0: # bulky snipped of code ensuring that single float values are processed as well
             inv_arcLength = []
             for i, arc_lgth in enumerate(arcLength):
-                inv_arcLength.append(scipy.optimize.fmin(func=fx_invpolyArc, x0=[0], args=(arc_lgth, polyCoeff,))[0])
+                inv_arcLength.append(scipy.optimize.fmin(func=fx_invpolyArc, x0=[0], args=(arc_lgth, polyCoeff,),
+                                                         disp=0)[0])
         else:
             arcLength = arcLength[()]
-            inv_arcLength = scipy.optimize.fmin(func=fx_invpolyArc, x0=[0], args=(arcLength, polyCoeff,))[0]
+            inv_arcLength = scipy.optimize.fmin(func=fx_invpolyArc, x0=[0], args=(arcLength, polyCoeff,), disp=0)[0]
 
         return inv_arcLength
 
@@ -663,7 +648,6 @@ class LeadWorks:
 
     @staticmethod
     def create_skeleton(r3polynomial):
-        """"""
         evalAtT = np.arange(start=0, stop=1, step=1/1000) # create samples of all available datapoints
         refittedSkeleton = [np.polyval(x, evalAtT) for x in r3polynomial.T]
         return np.array(refittedSkeleton).T
