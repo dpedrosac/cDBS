@@ -42,6 +42,15 @@ class GuiLeadDetection(QWidget):
         lay1.addWidget(self.lineEditMetalThreshold)
         lay1.addStretch()
 
+        self.labelSNRThreshold = QLabel('SNR threshold?\t\t')
+        #self.labelSNRThreshold.setToolTip(setToolTips.PaCER_MetalThreshold())
+        self.lineEditSNRThreshold = QLineEdit()
+
+        lay2 = QHBoxLayout()
+        lay2.addWidget(self.labelSNRThreshold)
+        lay2.addWidget(self.lineEditSNRThreshold)
+        lay2.addStretch()
+
         self.labelLambda = QLabel('Lambda?\t\t\t')
         self.labelLambda.setToolTip(setToolTips.PaCER_Lambda())
         self.lineEditLambda = QLineEdit()
@@ -49,10 +58,10 @@ class GuiLeadDetection(QWidget):
         validator1 = QtGui.QRegExpValidator(regex)
         self.lineEditLambda.setValidator(validator1)
 
-        lay2 = QHBoxLayout()
-        lay2.addWidget(self.labelLambda)
-        lay2.addWidget(self.lineEditLambda)
-        lay2.addStretch()
+        lay3 = QHBoxLayout()
+        lay3.addWidget(self.labelLambda)
+        lay3.addWidget(self.lineEditLambda)
+        lay3.addStretch()
 
         self.labelProbMask = QLabel('Use probabilisitic mask?\t')
         self.labelProbMask.setToolTip(setToolTips.ProbabilisticMask())
@@ -64,11 +73,11 @@ class GuiLeadDetection(QWidget):
 
         self.btngroup_ProbMask.addButton(self.rbtnProbMasky)
         self.btngroup_ProbMask.addButton(self.rbtnProbMaskn)
-        lay3 = QHBoxLayout()
-        lay3.addWidget(self.labelProbMask)
-        lay3.addWidget(self.rbtnProbMasky)
-        lay3.addWidget(self.rbtnProbMaskn)
-        lay3.addStretch()
+        lay4 = QHBoxLayout()
+        lay4.addWidget(self.labelProbMask)
+        lay4.addWidget(self.rbtnProbMasky)
+        lay4.addWidget(self.rbtnProbMaskn)
+        lay4.addStretch()
 
         self.labelDetectionMethod = QLabel('Detection method?\t')
         self.lineDetectionMethod = QComboBox()
@@ -86,10 +95,10 @@ class GuiLeadDetection(QWidget):
         self.lineDetectionMethod.currentTextChanged.connect(self.comboChangedDetectionMethod)
         self.lineDetectionMethod.setDisabled(False)
 
-        lay4 = QHBoxLayout()
-        lay4.addWidget(self.labelDetectionMethod)
-        lay4.addWidget(self.lineDetectionMethod)
-        lay4.addStretch()
+        lay5 = QHBoxLayout()
+        lay5.addWidget(self.labelDetectionMethod)
+        lay5.addWidget(self.lineDetectionMethod)
+        lay5.addStretch()
 
         self.labelLeadType = QLabel('Implanted lead?\t\t')
         self.lineLeadType = QComboBox()
@@ -107,16 +116,34 @@ class GuiLeadDetection(QWidget):
         self.lineLeadType.currentTextChanged.connect(self.comboChangedLeadType)
         self.lineLeadType.setDisabled(False)
 
-        lay5 = QHBoxLayout()
-        lay5.addWidget(self.labelLeadType)
-        lay5.addWidget(self.lineLeadType)
-        lay5.addStretch()
+        lay6 = QHBoxLayout()
+        lay6.addWidget(self.labelLeadType)
+        lay6.addWidget(self.lineLeadType)
+        lay6.addStretch()
+
+        self.labelTransformMatrix = QLabel('Use transformation matrix?\t')
+        self.labelProbMask.setToolTip(setToolTips.ProbabilisticMask())
+        self.btngroup_TransformMatrx = QButtonGroup()
+        self.rbtnTransformMatrixy = QRadioButton('yes')
+        self.rbtnTransformMatrixn = QRadioButton('no')
+        self.rbtnProbMasky.toggled.connect(self.onClickedRBTN_TransformationMatrix)
+        self.rbtnProbMaskn.toggled.connect(self.onClickedRBTN_TransformationMatrix)
+
+        self.btngroup_TransformMatrx.addButton(self.rbtnTransformMatrixy)
+        self.btngroup_TransformMatrx.addButton(self.rbtnTransformMatrixn)
+        lay7 = QHBoxLayout()
+        lay7.addWidget(self.labelTransformMatrix)
+        lay7.addWidget(self.rbtnTransformMatrixy)
+        lay7.addWidget(self.rbtnTransformMatrixn)
+        lay7.addStretch()
 
         self.settings_list1.addLayout(lay1)
         self.settings_list1.addLayout(lay2)
         self.settings_list1.addLayout(lay3)
         self.settings_list1.addLayout(lay4)
         self.settings_list1.addLayout(lay5)
+        self.settings_list1.addLayout(lay6)
+        self.settings_list1.addLayout(lay7)
         self.settings_list1.addStretch()
 
         # ==============================    Create Content for Right Upper Box   ==============================
@@ -170,7 +197,8 @@ class GuiLeadDetection(QWidget):
             msgBox.exec()
         else:
             # Left side, i.e. PaCER
-            self.lineEditMetalThreshold.setText(self.cfg["lead_detection"]["PaCER"]["threshold"])
+            self.lineEditMetalThreshold.setText(self.cfg["lead_detection"]["PaCER"]["metal_threshold"])
+            self.lineEditSNRThreshold.setText(self.cfg["lead_detection"]["PaCER"]["snr_threshold"])
             self.lineEditLambda.setText(str(self.cfg["lead_detection"]["PaCER"]["lambda"]))
 
             if self.cfg["lead_detection"]["PaCER"]["probabilistic_mask"] == 'yes':
@@ -178,13 +206,19 @@ class GuiLeadDetection(QWidget):
             else:
                 self.rbtnProbMaskn.setChecked(True)
 
+            if self.cfg["lead_detection"]["PaCER"]["transformation_matrix"] == 'yes':
+                self.rbtnTransformMatrixy.setChecked(True)
+            else:
+                self.rbtnTransformMatrixn.setChecked(True)
+
             # Right side, i.e. Registration
             # self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
 
     def closeEvent(self, event):
         """saves the settings found here as a yaml file which may be loaded the next time as the configuration used"""
 
-        self.cfg["lead_detection"]["PaCER"]["threshold"] = self.lineEditMetalThreshold.text()
+        self.cfg["lead_detection"]["PaCER"]["metal_threshold"] = self.lineEditMetalThreshold.text()
+        self.cfg["lead_detection"]["PaCER"]["snr_threshold"] = self.lineEditSNRThreshold.text()
         self.cfg["lead_detection"]["PaCER"]["lambda"] = int(self.lineEditLambda.text())
 
         HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
@@ -209,6 +243,12 @@ class GuiLeadDetection(QWidget):
         radioBtn = self.sender()
         radioBtn.isChecked()
         self.cfg["lead_detection"]["PaCER"]["probabilistic_mask"] = self.sender().text()
+
+    @QtCore.pyqtSlot()
+    def onClickedRBTN_TransformationMatrix(self):
+        radioBtn = self.sender()
+        radioBtn.isChecked()
+        self.cfg["lead_detection"]["PaCER"]["transformation_matrix"] = self.sender().text()
 
     @QtCore.pyqtSlot()
     def onClickedRBTN_DefaultRegistration(self):

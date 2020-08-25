@@ -9,8 +9,7 @@ import scipy
 import math
 import time
 import utils.HelperFunctions as HF
-import multiprocessing as mp
-import glob
+import pickle
 from sklearn.decomposition import PCA
 import numpy as np
 from skimage.measure import regionprops, label
@@ -19,12 +18,9 @@ from dependencies import ROOTDIR
 import scipy.io as spio
 from matplotlib import pyplot as plt
 
-# TODO: constants to use throughout the script, should be included in the yaml configuration file
-METAL_THRESHOLD = 800
-LAMBDA_1 = 25
 
 class LeadWorks:
-    """Runs the algorithm for lead detection developed by Andreeas Husch et al.
+    """Runs the algorithm for lead detection developed by Andreas Husch et al.
     see https://www.sciencedirect.com/science/article/pii/S2213158217302450?via%3Dihub
     It includes a three-step process: i) pre-processing, ii) and iii)"""
 
@@ -33,10 +29,10 @@ class LeadWorks:
         self.verbose = 0
         self.debug=False
 
-    def PaCER_script(self, subjects, inputfolder='', flag=''):
-        """wrapper script for all multiprocessing all other steps"""
+    def PaCER_script(self, subjects, inputfolder=''):
+        """wrapper script for all steps included in the PaCER algorithm"""
 
-        if not inputfolder:
+        if not inputfolder: # select default input folder
             inputfolder = self.cfg["folders"]["nifti"]
 
         # Look for data files containing CT imaging including the brainMask and load this into workspace
@@ -63,11 +59,17 @@ class LeadWorks:
         #    pass
 
         fileID = list(HF.inner_join(file_id_brainMask, file_id_CTimaging))
-        elecModels, intensityProfiles, skelSkalms = self.electrodeEstimation(fileID[0], flag)
+        elecModels, intensityProfiles, skelSkalms = self.electrodeEstimation(fileID[0], threshold=
+        float(self.cfg["lead_detection"]["PaCER"]["metal_threshold"]))
+
+        with open(os.path.join(os.path.join(inputfolder, subjects[0]), 'elecModels_' + subjects[0] +'.pkl'), "wb") as f:
+            pickle.dump(elecModels, f)
+            pickle.dump(intensityProfiles, f)
+            pickle.dump(skelSkalms, f)
 
 
-    def electrodeEstimation(self, fileID, flag, threshold=1500):
-        """ estimates the electrode mask according to
+    def electrodeEstimation(self, fileID, threshold=1500):
+        """ estimates the electrode mask with a threshold according to:
         https://github.com/adhusch/PaCER/blob/master/src/Functions/extractElectrodePointclouds.m"""
 
         CTimaging = ants.image_read(fileID[0])
@@ -79,7 +81,7 @@ class LeadWorks:
         elif max(CTimaging.spacing) > 1:
             warnings.warn('\tSlice thickness > 1 mm! Independent contact detection most likely impossible. '
                           'Using contactAreaCenter based method.')
-            flag = 'contactAreaCenter'  # TODO The default should be included when LeadDetection is started
+            self.cfg["lead_detection"]["PaCER"]["detection_method"] = 'contactAreaCenter' # when spacing is too big, this detection method is recommended
         elif max(CTimaging.spacing) > .7:
             warnings.warn('\tSlice thickness > 0.7 mm! reliable contact detection not guaranteed. However, for certain '
                           'lead types w/ large contacts, it might work.')
@@ -113,6 +115,7 @@ class LeadWorks:
         leadPointCloudStruct = self.identifyLeads(fileID, CTimaging, brainMask_prob, threshold, areas) #
         elecModels, intensityProfiles, skelSkalms = [[] for _ in range(3)]
         for idx, leadPoints in enumerate(leadPointCloudStruct):
+            print("\n\n\tAnalysing lead no {} with {} pixels".format("\u0332".join(str(idx+1)), str(len(leadPoints["pixelList"]))))
             initialPoly, tPerMm, skeleton, totalLengthMm = self.electrodePointCloudModelEstimate(leadPoints)
             mod, prof, skel = \
                 self.refitElec(initialPoly, leadPoints["points"], leadPoints["pixelValues"])
@@ -146,7 +149,7 @@ class LeadWorks:
 
             latent = np.sqrt(latent) * 2
             lowerAxesLength = sorted(latent[1:])
-            if (latent[0] > LAMBDA_1 and latent[0]/np.mean(latent[1:]) > 10
+            if (latent[0] > self.cfg["lead_detection"]["PaCER"]["lambda"] and latent[0]/np.mean(latent[1:]) > 10
                     and lowerAxesLength[1] / (lowerAxesLength[0] + .001) < 8):
                 detected_leads.append(comp)
 
@@ -211,15 +214,15 @@ class LeadWorks:
         skeleton, sumInPlane  = np.array(skeleton), np.array(sumInPlane)
         filter = sumInPlane < np.median(sumInPlane)/1.5
         if sum(filter) > 0: # # filter skeleton for valid points
-            print('\tApplied axial skeleton filter due to low intensity planes')
+            print('\t\tApplied axial skeleton filter due to low intensity planes')
             skeleton = np.squeeze(skeleton[np.where(~filter), :])
 
         if all(skeleton[1, :] == np.zeros(3)):
-            raise Exception('Empty skeleton. Was CT-imaging acquired in axial flow?')  # What on earth does that mean?
+            raise Exception('\t\t... empty skeleton. Was CT-imaging acquired in axial flow?')  # What on earth does that mean?
 
         # Approximate parameterized polynomial([x y z] = f(t))
         if len(skeleton) < polynomial_ord + 1:
-            print('\tElectrodePointCloudModelEstimate: less data points {} than internal polynomial degree ({}). '
+            print('\t\tElectrodePointCloudModelEstimate: less data points {} than internal polynomial degree ({}). '
                   'caveat: lowering degree!'.format(str(len(skeleton), str(polynomial_ord))))
             polynomial_ord = len(skeleton) - 1
 
@@ -245,6 +248,7 @@ class LeadWorks:
 
         print("\tFirst run:")
         skeleton2nd, _, _, _, _ = self.oor(initialPoly, STEP_SIZE, XGrid, YGrid, interpolationF)
+
         print("\tSecond run:")
         R3polynomial2nd, _ = self.fitParamPolytoSkeleton(np.array(skeleton2nd), degree=8)
 
@@ -261,10 +265,10 @@ class LeadWorks:
         filterIdxs = np.where(skelScaleMm <= limit_contactsearch_mm)
 
         peakLocs, peakWaveCenters, peakValues, threshIntensityProfile, threshold, contactAreaCenter, contactAreaWidth, \
-            xrayMarkerAreaCenter, xrayMarkerAreaWidth = self.getIntensityPeaks(filteredIntensity, skelScaleMm,
-                                                                               filterIdxs)
+        xrayMarkerAreaCenter, xrayMarkerAreaWidth = self.getIntensityPeaks(filteredIntensity, skelScaleMm,
+                                                                           filterIdxs)
 
-        detection_method = 'contactAreaCenter' # TODO: include this part in the configuration, see flag problem above
+        detection_method = self.cfg["lead_detection"]["PaCER"]["detection_method"]
         if detection_method == 'peakWaveCenters':
             contact_positions = peakWaveCenters
         else:
@@ -284,10 +288,16 @@ class LeadWorks:
                 return
 
             lead_geometries = spio.loadmat(os.path.join(ROOTDIR, 'ext', 'PaCER', 'electrodeGeometries.mat'),
-                                               squeeze_me=True, simplify_cells=True)
+                                           squeeze_me=True, simplify_cells=True)
             lead_geometries = lead_geometries["electrodeGeometries"]
 
-            lead_type = 'BSc-2202 (directional)' #TODO: put this into configuration file yaml
+            if self.cfg["lead_detection"]["PaCER"]["lead_type"].startswith("BSc-2202"):
+                lead_type = "Boston Vercise Directional"
+            else:
+                lead_type = self.cfg["lead_detection"]["PaCER"]["lead_type"]
+
+            #TODO: in the mat-file, configuration should be changed so that it is same here; afterwards lines 294ff. can be deleted
+
             if lead_type == 'unknown':
                 warnings.warn('\tNo lead specification provided, please set lead_type if possible. Meanwhile trying'
                               'to estimate type by width of contact area. Might be wrong, please double-check!')
@@ -303,8 +313,7 @@ class LeadWorks:
                 print('Setting user specified electrode type: {}'.format(lead_type))
                 try:
                     idx_leadInformation = [i for i, x in enumerate([lead_type == k["string"]
-                                                         for k in lead_geometries]) if x][0]
-
+                                                                    for k in lead_geometries]) if x][0]
                     lead_information = lead_geometries[idx_leadInformation]
                 except IndexError:
                     warnings.warn('Unknown lead type given. Assuming default [-1]')
@@ -329,7 +338,9 @@ class LeadWorks:
                 poly_coeffs.append(np.polyval(coords, spacing))
 
             refittedR3PolyTmp = self.fitParamPolytoSkeleton(np.array(poly_coeffs).T, final_degree)
-            spacing = np.linspace(start=zeroT, stop=self.invPolyArcLength3(refittedR3PolyTmp[0], np.array(totalLengthMm))[0], num=math.floor(totalLengthMm[0] / xy_resolution))
+            spacing = np.linspace(start=zeroT, stop=self.invPolyArcLength3(refittedR3PolyTmp[0],
+                                                                           np.array(totalLengthMm))[0],
+                                  num=math.floor(totalLengthMm[0] / xy_resolution))
 
             poly_coeffs = []
             for i, coords in enumerate(refittedR3PolyTmp[0].T):
@@ -345,10 +356,10 @@ class LeadWorks:
 
             refittedR3PolyReZeroed = self.fitParamPolyToSkeleton(np.array(poly_coeffs) ,final_degree)
 
-        print('Electrode Length within Brain Convex Hull after contact detection and Zero-Point calibration: '
+        print('\t\t\tElectrode Length within Brain Convex Hull after contact detection and Zero-Point calibration: '
               '{:.5} mm'.format(str(self.polyArcLength3(refittedR3PolyReZeroed[0], 0, 1)[0])))
 
-        refitReZeroedElecMod = self.summarise_results(refittedR3PolyReZeroed[0], lead_information)
+        refitReZeroedElecMod = self.summarise_results(refittedR3PolyReZeroed[0], lead_information, lead_type)
 
         return refitReZeroedElecMod, filteredIntensity, skelScaleMm
 
@@ -382,7 +393,7 @@ class LeadWorks:
         stdFittingError = np.std(fittingErrs, axis=0)
         maxFittingError = np.max(fittingErrs, axis=0)
 
-        print('\t\tMax off-model: {:.4}, Mean off-model: {:.4}\n'.format(maxFittingError, meanFittingError))
+        print('\t\t\tMax off-model: {:.4}, Mean off-model: {:.4}\n'.format(maxFittingError, meanFittingError))
         if (maxFittingError > 0.35 and maxFittingError > (meanFittingError + 3 * stdFittingError)):
             print('\t\tCheck for outliers/make sure chosen polynomial degree is appropriate.\n '
                   '\t\tIn most cases selection should be fine.\n')
@@ -393,7 +404,7 @@ class LeadWorks:
         """optimal oblique re-sampling; routine enabling automatic contact detection by creating perpendicular slices
         with respect to the lead """
         if not run_information:
-            run_information = '\tEstimating oblique slices which are orthogonal to first-pass electrode'
+            run_information = '\t\tEstimating oblique slices which are orthogonal to first-pass electrode'
 
         SND_THRESH = 1500
         arcLength = self.polyArcLength3(r3Poly)
@@ -405,16 +416,17 @@ class LeadWorks:
             poly_coeffs.append(np.polyder(coords))
 
         evalAtT = np.arange(start=-lookahead, stop=1, step=step_size) # create samples of all available datapoints
+        iters = len(evalAtT)
         orthogonalSamplePoints, improvedSkeleton, avgIntensity, medIntensity, sumIntensity = [[] * i for i in range(5)]
         orthSamplePointsVol = np.zeros(r3Poly.shape[1]* len(xGrid) ** 2 * len(evalAtT)).reshape(r3Poly.shape[1],
                                                                                                 len(xGrid) ** 2, len(evalAtT))
         orthIntensVol = np.zeros(xGrid.shape[0] * xGrid.shape[1] * len(evalAtT)).reshape(xGrid.shape[0], xGrid.shape[1],
                                                                                          len(evalAtT))
         print("{}".format(run_information))
-        HF.LittleHelpers.printProgressBar(0, len(evalAtT), prefix='Progress:', suffix='Complete', length=50)
+        HF.LittleHelpers.printProgressBar(0, iters, prefix='Progress:', suffix='Complete', length=50)
         for ind, relative_location in enumerate(evalAtT):
             time.sleep(.01)
-            HF.LittleHelpers.printProgressBar(ind + 1, len(evalAtT), prefix='Progress:', suffix='Complete', length=50)
+            HF.LittleHelpers.printProgressBar(ind + 1, iters, prefix='Progress:', suffix='Complete', length=50)
             direction = [np.polyval(x, relative_location) for x in poly_coeffs]
             currentPoint = np.polyval(r3Poly, relative_location)
             directionNorm = direction / np.linalg.norm(direction)
@@ -431,7 +443,7 @@ class LeadWorks:
 
             intensities = interpolationF.__call__(orthogonalSamplePoints.T)
             intensitiesNanZero = np.where(np.isnan(np.copy(intensities)), 0, intensities)
-            intensitiesNanZero[intensitiesNanZero < SND_THRESH] = 0
+            intensitiesNanZero[intensitiesNanZero < float(self.cfg["lead_detection"]["PaCER"]["snr_threshold"])] = 0
 
             with np.errstate(divide='ignore', invalid='ignore'):
                 skelPoint = orthogonalSamplePoints @ intensitiesNanZero / sum(intensitiesNanZero)
@@ -592,18 +604,19 @@ class LeadWorks:
 
         return elecStruct, rms
 
-    def summarise_results(self, r3polynomial, lead_information):
+    def summarise_results(self, r3polynomial, lead_information, lead_type):
         """function aiming at providing an overview of the results obtained"""
 
-        items1 = 'electrode_diamater', 'electrode_color', 'active_contact_color', 'alpha' ,'metal_color', \
-                 'r3polynomial', 'referenceTrajectory', 'electrodeInfo', 'activeContact', 'detectedContactPosition', \
+        items1 = 'lead_diameter', 'lead_color', 'active_contact_color', 'alpha' ,'metal_color', \
+                 'r3polynomial', 'referenceTrajectory', 'leadInfo', 'activeContact', 'detectedContactPosition', \
                  'useDetectedContactPosition', 'skeleton', 'contactPositions', 'getContactPositions3D', 'trajectory', \
-                 'markers_head', 'markers_tail', 'normtraj_vector', 'orth', 'markers_x' 'markers_y'
+                 'markers_head', 'markers_tail', 'normtraj_vector', 'orth', 'markers_x', 'markers_y', 'rotation', \
+                 'manual_correction', 'first_run'
         refitReZeroedElecMod = {k: [] for k in items1}
 
         refitReZeroedElecMod["lead_information"] = lead_information
-        refitReZeroedElecMod["electrode_diameter"] = 1.27
-        refitReZeroedElecMod["electrode_color"] = 0.1171875, 0.5625, 1
+        refitReZeroedElecMod["lead_diameter"] = 1.27
+        refitReZeroedElecMod["lead_color"] = 0.1171875, 0.5625, 1
         refitReZeroedElecMod["active_contact_color"] = 1, 0.83984375, 0
         refitReZeroedElecMod["alpha"] = .9
         refitReZeroedElecMod["metal_color"] = .75, .75, .75
@@ -625,24 +638,27 @@ class LeadWorks:
         trajectory = []
         for dim in range(3):
             trajectory.append(np.linspace(start=refitReZeroedElecMod["getContactPositions3D"][0, dim],
-                              stop=refitReZeroedElecMod["getContactPositions3D"][0,dim] +
-                                   10*(refitReZeroedElecMod["getContactPositions3D"][1,dim] -
-                                       refitReZeroedElecMod["getContactPositions3D"][-1,dim]), num=20))
+                                          stop=refitReZeroedElecMod["getContactPositions3D"][0,dim] +
+                                               10*(refitReZeroedElecMod["getContactPositions3D"][1,dim] -
+                                                   refitReZeroedElecMod["getContactPositions3D"][-1,dim]), num=20))
         refitReZeroedElecMod["trajectory"] = np.array(trajectory).T
 
         refitReZeroedElecMod["markers_head"] = refitReZeroedElecMod["getContactPositions3D"][0,:]
-        refitReZeroedElecMod["markers_tail"] = refitReZeroedElecMod["getContactPositions3D"][0, :]
+        refitReZeroedElecMod["markers_tail"] = refitReZeroedElecMod["getContactPositions3D"][3,:]
 
         refitReZeroedElecMod["normtraj_vector"] = (refitReZeroedElecMod["getContactPositions3D"][0, :] - \
-                                                  refitReZeroedElecMod["getContactPositions3D"][3, :]) / \
+                                                   refitReZeroedElecMod["getContactPositions3D"][3, :]) / \
                                                   np.linalg.norm(refitReZeroedElecMod["getContactPositions3D"][0, :] - \
-                                                  refitReZeroedElecMod["getContactPositions3D"][3, :])
+                                                                 refitReZeroedElecMod["getContactPositions3D"][3, :])
         refitReZeroedElecMod["orth"] = self.null(refitReZeroedElecMod["normtraj_vector"]) % \
-                                       refitReZeroedElecMod["electrode_diameter"]/2
+                                       refitReZeroedElecMod["lead_diameter"]/2
         refitReZeroedElecMod["markers_x"] = refitReZeroedElecMod["getContactPositions3D"][0,:] + \
                                             refitReZeroedElecMod["orth"][:,0]
         refitReZeroedElecMod["markers_y"] = refitReZeroedElecMod["getContactPositions3D"][0,:] + \
                                             refitReZeroedElecMod["orth"][:,1]
+        refitReZeroedElecMod["model"] = lead_type
+        refitReZeroedElecMod["manual_correction"] = False
+        refitReZeroedElecMod["first_run"] = False
 
         return refitReZeroedElecMod
 

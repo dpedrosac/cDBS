@@ -9,6 +9,7 @@ import utils.HelperFunctions as HF
 from GUI.GuiTwoLists_generic import TwoListGUI
 from utils.settingsLeadDetection import GuiLeadDetection
 import utils.preprocLeadCT as LeadDetectionRoutines
+import utils.elecModel_manualcorrection as plotElecModel
 import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
 
@@ -68,10 +69,13 @@ class GuiTabDetectLeads(QWidget):
         self.ActionsTabANTs = QGroupBox("Lead detection routines")
         self.HBoxMiddleLeftTab = QVBoxLayout(self.ActionsTabANTs)
         self.btn_LeadDetectPacer = QPushButton('PaCER algorithm')
-        #self.btn_N4BiasCorr.setToolTip(setToolTips.N4BiasCorrection())
         self.btn_LeadDetectPacer.clicked.connect(self.run_LeadDetectionPaCER)
 
+        self.btn_RefineDetectedLeads = QPushButton('Refine detected leads')
+        self.btn_RefineDetectedLeads.clicked.connect(self.run_ManualCorrection)
+
         self.HBoxMiddleLeftTab.addWidget(self.btn_LeadDetectPacer)
+        self.HBoxMiddleLeftTab.addWidget(self.btn_RefineDetectedLeads)
 
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.QualityTabLeadDetect = QGroupBox("Quality checks for Lead detection")
@@ -175,6 +179,23 @@ class GuiTabDetectLeads(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
                 LeadDetectionRoutines.LeadWorks().PaCER_script(subjects=self.selected_subj_ANT)
+
+    def run_ManualCorrection(self):
+        """wrapper which starts the plotting routine for the detected lead which enables manual corrections"""
+
+        if len(self.selected_subj_ANT) != 1:
+            HF.msg_box(text="Please select one and only one subject",
+                                     title="Subjects selected")
+            return
+        else:
+            msg = "Are you sure you want to process the following subject:\n\n" \
+                  "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
+            ret = QMessageBox.question(self, 'MessageBox', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if ret == QMessageBox.Yes:
+                plotElecModel.PlotRoutines(subject=self.selected_subj_ANT[0], inputfolder=os.path.join(self.niftidir,
+                                                                                      self.selected_subj_ANT[0]))
+
+
 
     def run_PreferencesLeadDetection(self):
         """change settings for the Lead detection routines, that is settings for PaCER """

@@ -46,10 +46,12 @@ preprocess:
     sequences: 'T1_,T2_,PD_'
 lead_detection:
   PaCER:
-    threshold: '1500'
+    metal_threshold: '800'
+    snr_threshold: '1500'
     lambda: '25'
     probabilistic_mask: 'yes'
     detection_method: 'contactAreaCenter'
     lead_type: 'BSc-2202 (direct.)'
+    transformation_matrix: 'no'
 
   metdata: "patients.xlsx"

@@ -10,9 +10,11 @@ lead_detection:
   PaCER:
     detection_method: contactAreaCenter
     lambda: 25
-    lead_type: BSc-2201 (non-direct.)
+    lead_type: 'BSc-2202 (direct.)'
+    metal_threshold: '800'
     probabilistic_mask: 'yes'
-    threshold: '1500'
+    snr_threshold: '1500'
+    transformation_matrix: 'no'
 preprocess:
   ANTsN4:
     bspline-fitting: 200
