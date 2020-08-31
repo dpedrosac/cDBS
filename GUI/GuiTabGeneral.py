@@ -111,16 +111,20 @@ class GuiTabGeneral(QWidget):
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
         self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of nii-files')
-        self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
+        if not self.niftidir == "":
+            self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
-        self.cfg["folders"]["nifti"] = self.niftidir
-        with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
-            yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
-                           explicit_start=True, allow_unicode=True, encoding='utf-8')
+            self.cfg["folders"]["nifti"] = self.niftidir
+            with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
+                yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
+                               explicit_start=True, allow_unicode=True, encoding='utf-8')
 
-        self.availableNiftiTab.clear()
-        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
-        self.add_available_items(self.availableNiftiTab, itemsChanged)
+            self.availableNiftiTab.clear()
+            itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
+            self.add_available_items(self.availableNiftiTab, itemsChanged)
+        else:
+            self.niftidir = self.cfg["folders"]["nifti"]
+
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
