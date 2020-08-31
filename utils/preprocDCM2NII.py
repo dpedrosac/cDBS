@@ -188,8 +188,8 @@ class PreprocessDCM:
             dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'dcm2niix.exe')
         elif sys.platform == 'linux':
             dcm2niix_bin = "dcm2niix"
-        elif sys.platform == 'macos':
-            dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'dcm2niix_mac')
+        elif (sys.platform == 'macos' or sys.platform == 'darwin'):
+            dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'macos', 'dcm2niix')
         else:
             print('Chris Rordens dcm2niix routine not found, please make sure it is available.', end='', flush=True)
             dcm2niix_bin = False

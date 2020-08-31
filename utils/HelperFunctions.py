@@ -125,8 +125,17 @@ class LittleHelpers:
                 cmd = ["itksnap", "-g", file_names[0]]
             else:
                 cmd = ["itksnap", "-g", file_names[0], "-o", *file_names[1:]]
-        elif sys.platform == 'macos':
-            LittleHelpers.msg_box(text="Could not be tested yet!!!", title="Mac unavailable so far")
+        elif sys.platform == 'macos' or sys.platform == 'darwin':
+            # LittleHelpers.msg_box(text="Could not be tested yet!!!", title="Mac unavailable so far")
+            if len(file_names) == 1:
+                cmd = ["itksnap", "-g", file_names[0]]
+            else:
+                cmd = ["itksnap", "-g", file_names[0], "-o", *file_names[1:]]
+
+            # TODO: add a setup file which ensures the right structure is given w/ data/, ext/, etc.
+            # TODO: add sudo /Applications/ITK-SNAP.app/Contents/bin/install_cmdl.sh to the setup
+            # TODO: change ITK-SNAP so that it does not freeze the entire script
+            # TODO: remove other viewers apart from itksnap and options for win systems
 
         if 'ITK-SNAP' in path2viewer or 'snap' in path2viewer:
             p = subprocess.Popen(cmd, shell=False,
