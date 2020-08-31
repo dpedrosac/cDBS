@@ -41,14 +41,14 @@ class GuiTabDetectLeads(QWidget):
         self.tab.setLayout(self.tab.layout)
 
         # ------------------------- Upper left part (Folder)  ------------------------- #
-        self.FolderboxTab = QGroupBox("Directory (NIFTI-files)")
+        self.FolderboxTab = QGroupBox("Directory (Bugra-Files)")
         self.HBoxUpperLeftTab = QVBoxLayout(self.FolderboxTab)
         self.lblWdirTab = QLabel('wDIR: {}'.format(self.niftidir))
         self.HBoxUpperLeftTab.addWidget(self.lblWdirTab)
-
+        #TODO: is it possible to summarize the working directoy ? If the path is too long the list of available subjects gets too small
         self.btnChangeWdir = QPushButton('Change working directory')
         self.btnChangeWdir.clicked.connect(self.change_wdir)
-
+        #if changing folder is canceled, the whole script shuts down (macOS Catalina)
         self.btnReloadFilesTab = QPushButton('Reload files')
         self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
 
@@ -85,7 +85,9 @@ class GuiTabDetectLeads(QWidget):
         self.btn_QC_LeadDetect.clicked.connect(self.VisualiseLeadDetection)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
 #        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
-
+        #TODO: whatsoever (?); accurate
+        #TODO: view available (...); in tooltips correction instaed of correcion
+        #TODO: additionally.view available in General -> tooltips: subject instead of just subj
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
         self.HBoxUpperRightTab = QVBoxLayout(self.listbox)
