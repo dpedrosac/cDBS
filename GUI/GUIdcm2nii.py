@@ -8,6 +8,7 @@ import utils.HelperFunctions as HF
 from utils.settingsDCM2NII import GuiSettingsDCM2NII
 from utils import preprocDCM2NII
 import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
 
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
@@ -15,31 +16,33 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
 
 
 class MainGuiDcm2nii(QMainWindow):
-    """ This is a GUI which aims at selecting the folders/subjects of whom imaging will be transformed from DICOM to
-    NIFTI files using Chris Rordens dcm2niix routines. It allows batch processing of data and changing some of the settings
+    """ This is a GUI aiming at selecting the folders/subjects of whom imaging will be transformed from DICOM to NIFTI-
+    files using Chris Rordens dcm2niix routines. It allows batch processing of data and changing some of the settings
     to later run a wrapper for the code"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(900, 600)
         self.setWindowTitle('Batch convert DICOM files to NIFTI using dcm2niix ')
-        self.table_widget = ContentGuiDcm2nii(self)
+        self.table_widget = ContentGuiDCM2Nii(self)
         self.setCentralWidget(self.table_widget)
         self.show()
 
 
-class ContentGuiDcm2nii(QWidget):
-
+class ContentGuiDCM2Nii(QWidget):
     def __init__(self, parent=None):
         super(QWidget, self).__init__(parent)
 
         # Load configuration files and general settings
-        rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-        self.cfg = HF.LittleHelpers.load_config(rootdir)
+        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
         if os.path.isdir(self.cfg["folders"]["dicom"]):
             self.dicomdir = self.cfg["folders"]["dicom"]
         else:
-            self.dicomdir = os.getcwd()
+            HF.msg_box(text='No directory with DICOM files defined, please select manually.', title='NO DICOM folder')
+            self.dicomdir = QFileDialog.getExistingDirectory(self, 'Please select the directory of DICOM folders')
+        self.cfg["folders"]["dicom"] = self.dicomdir
+        self.cfg["folders"]["rootdir"] = ROOTDIR
+        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
 
         # Create general layout
         self.tot_layout = QVBoxLayout(self)
@@ -125,36 +128,20 @@ class ContentGuiDcm2nii(QWidget):
 
         try:
             self.mInput.clear()
-            items = self.read_subjlist(dicomdir=self.cfg["folders"]["dicom"])
-            self.addAvailableSubj(items)
+            items = HF.list_folders(inputdir=self.cfg["folders"]["dicom"], prefix='', files2lookfor='')
+            self.add_available_subj(items)
         except FileExistsError:
             print('{} without any valid files/folders, continuing ...'.format(self.dicomdir))
 
         self.update_buttons_status()
         self.connections()
 
-    @staticmethod # TODO similarly to GUIToolbox, this is so pivotal that it MUST be contained in helper functions
-    def read_subjlist(dicomdir):
-        """takes a folder and creates a list of all available subjects in this folder"""
-        list_all = [name for name in os.listdir(dicomdir)
-                    if os.path.isdir(os.path.join(dicomdir, name))]
-
-        if list_all == '':
-            list_subj = 'No available subjects, please make sure DICOM folders are present and correct prefix is given'
-        else:
-            list_subj = list_all
-            list_subj = set(list_subj)
-
-        return list_subj
-
-    def addAvailableSubj(self, items):
-        """adds the available subjects in the working directory into the items list;
-        an error message is dropped if none available"""
+    def add_available_subj(self, items):
+        """adds available subjects in the cwd to item list; PyQT5 dialog is opened if none available"""
 
         if len(items) == 0:
-            buttonReply = QMessageBox.question(self, 'No files in the dicomdir', 'There are no subjects available '
-                                               'in the current working directory ({}). Do you want to '
-                                               ' change to a different one?'.format(self.dicomdir),
+            buttonReply = QMessageBox.question(self, 'No files in the DICOM directory', 'No subjects available in the'
+                                               'CWD: {}. Do you want to change to different one?'.format(self.dicomdir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_dicomdir()
@@ -168,9 +155,10 @@ class ContentGuiDcm2nii(QWidget):
         self.dicomdir = QFileDialog.getExistingDirectory(self, 'title')
         self.label_dicomdir.setText('dicomDIR: {}'.format(self.dicomdir))
         self.mInput.clear()
+        items = HF.list_folders(inputdir=self.cfg["folders"]["dicom"], prefix='', files2lookfor='')
+        # items = self.read_subjlist(dicomdir=self.cfg["folders"]["dicom"])
 
-        items = self.read_subjlist(dicomdir=self.cfg["folders"]["dicom"])
-        self.addAvailableSubj(items)
+        self.add_available_subj(items)
         self.cfg["folders"]["dicom"] = self.dicomdir
         HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
 
@@ -178,8 +166,7 @@ class ContentGuiDcm2nii(QWidget):
         """Function intended to save the DICOM directory once button is pressed"""
         self.cfg["folders"]["dicom"] = self.dicomdir
         HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-        HF.LittleHelpers.msg_box(text="Folder changed in the configuration file to {}".format(self.dicomdir),
-                                 title='Changed folder')
+        HF.msg_box(text="Folder changed in the configuration file to {}".format(self.dicomdir), title='Changed folder')
 
     def settings_show(self):
         """Opens a new GUI in which the settings for the tansformation con be changed and saved to config file"""
@@ -203,7 +190,8 @@ class ContentGuiDcm2nii(QWidget):
     @QtCore.pyqtSlot()
     def update_buttons_status(self):
         self.mBtnUp.setDisabled(not bool(self.mOutput.selectedItems()) or self.mOutput.currentRow() == 0)
-        self.mBtnDown.setDisabled(not bool(self.mOutput.selectedItems()) or self.mOutput.currentRow() == (self.mOutput.count() - 1))
+        self.mBtnDown.setDisabled(not bool(self.mOutput.selectedItems()) or
+                                  self.mOutput.currentRow() == (self.mOutput.count() - 1))
         self.mBtnMoveToAvailable.setDisabled(not bool(self.mInput.selectedItems()) or self.mOutput.currentRow() == 0)
         self.mBtnMoveToSelected.setDisabled(not bool(self.mOutput.selectedItems()))
         self.mButtonToAvailable.setDisabled(not bool(self.mOutput.selectedItems()))

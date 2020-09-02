@@ -27,6 +27,11 @@ def renameFolders():
     return HF.LittleHelpers.split_lines(text)
 
 # ==============================    Tab 2 - GUITabPreprocessANTs   ==============================
+def ChangeWdirNIFTI():
+    text = ('Opens a dialog in which the NIFTI directory may be changed. For actions to take place, press '
+            '"reload files" button')
+    return HF.LittleHelpers.split_lines(text)
+
 def N4BiasCorrection():
     text = "Reduces the Bias from the MRI using the N4Bias correction method as described in N.J. Tustison, ..., and " \
            "J.C. Gee. "'N4ITK: Improved N3 Bias Correction IEEE Transactions on Medical Imaging, ' \
@@ -59,9 +64,9 @@ def RegisterMRI2template():
     return HF.LittleHelpers.split_lines(text)
 
 
-def checkN4BiasCorrectionresults():
-    text = "Displays the raw imaging before correcion, the imaging after N4-Bias correction and the difference between " \
-           "to see whether there have been any problems whatsoever"
+def compareNIFTIfiles():
+    text = "Opens a dialog in order to select NIFTI-files which can be displayed using the image viewer. This enables" \
+           " to see whether there have been any problems whatsoever"
     return HF.LittleHelpers.split_lines(text)
 
 

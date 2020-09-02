@@ -5,6 +5,7 @@ tests/
 ext/templates
 !ext/templates/mni_icbm152_nlin_asym_09b
 config_imagingTB.yaml
+
 # Environments
 .env
 .venv

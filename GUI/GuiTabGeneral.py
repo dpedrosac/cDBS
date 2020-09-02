@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import utils.HelperFunctions as HF
-from utils.GUIdcm2nii import MainGuiDcm2nii
+from GUI.GUIdcm2nii import MainGuiDcm2nii
 from utils.settingsRenameFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
@@ -125,7 +125,6 @@ class GuiTabGeneral(QWidget):
         else:
             self.niftidir = self.cfg["folders"]["nifti"]
 
-
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
 
@@ -171,7 +170,6 @@ class GuiTabGeneral(QWidget):
         else:
             HF.msg_box(text='Subject details are not available!', title='Detail file not found')
 
-
     def run_rename_folders(self):
         """Renames all folders with a similar prefix; After that manual reloading is necessary"""
 
@@ -187,15 +185,13 @@ class GuiTabGeneral(QWidget):
                        title="No subject selected")
             return
         elif len(self.selected_subj_Gen) > 1:
-            HF.msg_box(text="Please select only one folder to avoid loading too many images",
-                                     title="Too many subjects selected")
+            HF.msg_box(text="Please select one folder to avoid excessive image load", title="Number of selected files")
             return
         else:
             image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_Gen[0])
 
         self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
         self.SelectFiles.show()
-
 
     def run_DCM2NII(self):
         """wrapper to start the GUI which enables to batch preprocess DICOM dolers and convert them to NIFTI files"""

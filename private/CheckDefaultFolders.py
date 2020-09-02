@@ -17,13 +17,10 @@ class FileLocation:
             import sys
             platform = sys.platform
 
-        if platform == 'win32':
-            default_folders = ['C:/Program Files/', 'C:/Program Files (x386)/',
-                               os.path.join(rootdir, 'ext', 'snap-3.6.0')]
-        elif platform == 'linux':
+        if platform == 'linux':
             default_folders = ["/etc/bin/", "/usr/lib/snap-3.6.0", "/usr/lib/snap-3.6.0/ITK-SNAP",
                                os.path.join(rootdir, 'ext', 'snap-3.6.0')]
-        elif platform == 'macos':
+        elif platform == 'macos' or platform == 'darwin':
             default_folders = ["/Applications/snap-3.6.0"]
 
         try:

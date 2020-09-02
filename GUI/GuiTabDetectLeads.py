@@ -81,7 +81,7 @@ class GuiTabDetectLeads(QWidget):
         self.QualityTabLeadDetect = QGroupBox("Quality checks for Lead detection")
         self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabLeadDetect)
         self.btn_QC_LeadDetect = QPushButton('Check lead detection \nin viewer')
-        self.btn_QC_LeadDetect.setToolTip(setToolTips.checkN4BiasCorrectionresults())
+        self.btn_QC_LeadDetect.setToolTip(setToolTips.compareNIFTIfiles())
         self.btn_QC_LeadDetect.clicked.connect(self.VisualiseLeadDetection)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
 #        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)

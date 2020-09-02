@@ -5,15 +5,24 @@
 patients"""
 
 from setuptools import setup, find_packages
+from setuptools.command.build_ext import build_ext
+import setuptools.command.build_ext
 import os
+import subprocess
 
 ROOTDIR = os.path.dirname(os.path.realpath(__file__))
-version = "0.1.0"
+version = "0.1.1"
+
+class CMakeBuild(build_ext):
+    def run(self):
+        ## Find or Configure ANTs ##
+        print("\t ... to set up the required directories")
+        subprocess.run(['./scripts/configure_cDBS.sh'], cwd=ROOTDIR)
 
 setup(
-    name='analysis-myoDBS',
+    name='cDBS',
     version=version,
-    description='This projects intends to provide a toolbox for analysing iamging data from patients receiving DBS '
+    description='This projects intends to provide a toolbox for analysing imaging data from patients receiving DBS '
                 'electrodes. Particularly, the preoperative MRI scans and postoperative CT scans are used to visualise'
                 'the location of the electrodes.',
     # TODO, add: long_description='long_description',  # Optional
@@ -23,9 +32,9 @@ setup(
         'Intended Audience :: Private',
         'Topic :: Software Development :: Data recording',
         'License :: MIT License',
-        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.6',
         ],
-
+    cmdclass={"folders": CMakeBuild},
     packages=find_packages(),
     python_requires='>=2.7,!=3.0.*,!=3.1.*',
     install_requires=[

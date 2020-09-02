@@ -14,7 +14,6 @@ import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
 
 
-# TODO: rename compare_n4Bias_results as this enables to look for all kind of nii-files
 class GuiTabPreprocessANTs(QWidget):
     """Tab which shows the options for preprocessing data, that is N4BiasfieldCorrection and Coregestiering of pre- and
      postoperative imaging"""
@@ -44,6 +43,7 @@ class GuiTabPreprocessANTs(QWidget):
         self.HBoxUpperLeftTab.addWidget(self.lblWdirTab)
 
         self.btnChangeWdir = QPushButton('Change working directory')
+        self.btnChangeWdir.setToolTip(setToolTips.ChangeWdirNIFTI())
         self.btnChangeWdir.clicked.connect(self.change_wdir)
 
         self.btnReloadFilesTab = QPushButton('Reload files')
@@ -83,8 +83,8 @@ class GuiTabPreprocessANTs(QWidget):
         self.QualityTabANTs = QGroupBox("Quality checks for ANTs preprocessing")
         self.HBoxLowerLeftTab = QVBoxLayout(self.QualityTabANTs)
         self.btn_QC_ANTsPreproc = QPushButton('View available \nNIFTI-files in viewer')
-        self.btn_QC_ANTsPreproc.setToolTip(setToolTips.checkN4BiasCorrectionresults())
-        self.btn_QC_ANTsPreproc.clicked.connect(self.compare_n4Bias_results)
+        self.btn_QC_ANTsPreproc.setToolTip(setToolTips.compareNIFTIfiles())
+        self.btn_QC_ANTsPreproc.clicked.connect(self.display_nifti_files)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_ANTsPreproc)
 
         # -------------------- Right part (Subject list)  ----------------------- #
@@ -123,7 +123,7 @@ class GuiTabPreprocessANTs(QWidget):
             self.cfg["folders"]["nifti"] = self.niftidir
             with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
                 yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
-                               explicit_start=True, allow_unicode=True, encoding='utf-8') # saves new folder to yaml-file
+                               explicit_start=True, allow_unicode=True, encoding='utf-8')  # saves changes to yaml-file
 
             self.availableNiftiTab.clear()
             itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
@@ -188,7 +188,7 @@ class GuiTabPreprocessANTs(QWidget):
         self.ANTsSettings = GuiSettingsNiftiAnts()
         self.ANTsSettings.show()
 
-    def compare_n4Bias_results(self):
+    def display_nifti_files(self):
         """this function enables to select NIFTI files and e.g. compare the results obtained at this step."""
 
         if not self.selected_subj_ANT:
@@ -196,11 +196,11 @@ class GuiTabPreprocessANTs(QWidget):
                        title="No subject selected")
             return
         elif len(self.selected_subj_ANT) > 1:
-            HF.LittleHelpers.msg_box(text="Please select only one folder to avoid loading too many images",
-                                     title="Too many subjects selected")
+            HF.msg_box(text="Please select only one folder to avoid loading too many images",
+                       title="Too many subjects selected")
             return
         else:
-            image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0]) # Is the index necessary
+            image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0])
 
         self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
         self.SelectFiles.show()

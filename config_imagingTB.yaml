@@ -1,18 +1,21 @@
 ---
 folders:
-  dicom: /Users/Bugrahan/PycharmProjects/cDBS/data/dicom
-  nifti: /Users/Bugrahan/PycharmProjects/cDBS/data/nifti
-  path2itksnap: /usr/lib/snap-3.6.0
+  dicom: /media/storage/cDBS/data/DICOM
+  nifti: /media/storage/cDBS/data/NIFTI
+  path2itksnap: ''
   path2slicer: ''
   prefix: subj
-  rootdir: /Users/Bugrahan/PycharmProjects/cDBS
+  rootdir: /media/storage/cDBS
 lead_detection:
   PaCER:
     detection_method: contactAreaCenter
-    lambda: 25
-    lead_type: BSc-2201 (non-direct.)
+    lambda: '25'
+    lead_type: BSc-2202 (direct.)
+    metal_threshold: '800'
     probabilistic_mask: 'yes'
-    threshold: '1500'
+    snr_threshold: '1500'
+    transformation_matrix: 'no'
+  metdata: patients.xlsx
 preprocess:
   ANTsN4:
     bspline-fitting: 200
@@ -23,9 +26,9 @@ preprocess:
     - 50
     denoise: 'no'
     dti_prefix: ep2d
-    prefix: ''
+    prefix: bc_
     shrink-factor: 4
-    threshold: 1.0e-07
+    threshold: 1e-7
   dcm2nii:
     BIDSsidecar: 'yes'
     IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
@@ -34,7 +37,6 @@ preprocess:
     OutputFileStruct: '%p_%d'
     ReorientCrop: 'no'
     Verbosity: 1
-  metdata: patients.xlsx
   normalisation:
     prefix: norm_
     sequences: T1_,T2_,PD_
