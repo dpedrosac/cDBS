@@ -6,7 +6,7 @@ import yaml
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
-import utils.HelperFunctions as HF
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 from GUI.GUIdcm2nii import MainGuiDcm2nii
 from utils.settingsRenameFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
@@ -26,13 +26,13 @@ class GuiTabGeneral(QWidget):
         if not ROOTDIR:
             ROOTDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
-        if os.path.isdir(self.cfg["folders"]["nifti"]):
-            self.niftidir = self.cfg["folders"]["nifti"]
+        self.cfg = Configuration.load_config(ROOTDIR)
+        if os.path.isdir(self.cfg['folders']['nifti']):
+            self.niftidir = self.cfg['folders']['nifti']
         else:
             self.niftidir = os.getcwd()
-        self.cfg["folders"]["rootdir"] = ROOTDIR
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        self.cfg['folders']['rootdir'] = ROOTDIR
+        Configuration.save_config(ROOTDIR, self.cfg)
 
         self.lay = QHBoxLayout(self)
         self.tab = QWidget()
@@ -89,7 +89,7 @@ class GuiTabGeneral(QWidget):
         self.availableNiftiTab.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
 
-        itemsTab = HF.list_folders(self.niftidir, prefix=self.cfg["folders"]["prefix"])
+        itemsTab = FileOperations.list_folders(self.niftidir, prefix=self.cfg['folders']['prefix'])
         self.add_available_items(self.availableNiftiTab, itemsTab)
         self.HBoxUpperRightTab.addWidget(self.availableNiftiTab)
 
@@ -105,32 +105,32 @@ class GuiTabGeneral(QWidget):
 
         self.lay.addWidget(self.tab)
 
-    # Start with the functions for lists and buttons in this tab
+    # ------------------------- Start with the functions for lists and buttons in this tab  ------------------------- #
     def change_wdir(self):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
         self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of nii-files')
-        if not self.niftidir == "":
+        if not self.niftidir == '':
             self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
-            self.cfg["folders"]["nifti"] = self.niftidir
+            self.cfg['folders']['nifti'] = self.niftidir
             with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
                 yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
                                explicit_start=True, allow_unicode=True, encoding='utf-8')
 
             self.availableNiftiTab.clear()
-            itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
+            itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], self.cfg['folders']['prefix'])
             self.add_available_items(self.availableNiftiTab, itemsChanged)
         else:
-            self.niftidir = self.cfg["folders"]["nifti"]
+            self.niftidir = self.cfg['folders']['nifti']
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
 
-        self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
+        self.cfg = Configuration.load_config(self.cfg['folders']['rootdir'])
         self.availableNiftiTab.clear()
-        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
+        itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def change_list_item(self):
@@ -144,31 +144,34 @@ class GuiTabGeneral(QWidget):
             for i in range(len(items)):
                 self.selected_subj_Gen.append(str(self.availableNiftiTab.selectedItems()[i].text()))
 
-    def add_available_items(self, sending_list, items, msg='yes'):
+    def add_available_items(self, sending_list, items, msg="yes"):
         """adds the available subjects in the working directory into the items list;
         an error message is dropped if none available"""
-        if len(items) == 0 and msg == 'yes':
-            buttonReply = QMessageBox.question(self, 'No files in dir', 'There are no subjects available '
-                                               'in the current working directory ({}). Do you want to '
-                                               ' change to a different one?'.format(self.niftidir),
+        if len(items) == 0 and msg == "yes":
+            buttonReply = QMessageBox.question(self, "No files in dir", "There are no subjects available "
+                                               "in the current working directory ({}). Do you want to "
+                                               " change to a different one?".format(self.niftidir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_wdir()
         else:
             items = list(items)
-            items.sort(key=lambda fname: int(fname.split(self.cfg["folders"]["prefix"])[1]))
+            items.sort(key=lambda fname: int(fname.split(self.cfg['folders']['prefix'])[1]))
             sending_list.addItems(items)
 
-    # Separate functions/GUIs that may be initialised here
     def openDetails(self):
         """opens details file which has additional information on subjects """
         import subprocess
 
-        fileName = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
+        fileName = os.path.join(self.cfg['folders']['nifti'], 'subjdetails.csv')
         if os.path.isfile(fileName):
-            subprocess.Popen(["xdg-open", ''.join(fileName)])
+            if sys.platform == 'linux':
+                subprocess.Popen(['xdg-open', ''.join(fileName)])
+            else:
+                ['open', ''.join(fileName)] # TODO: implement xdg-open in macos and put the command in the install routine
+                #Output.msg_box(text="opening csv-files on machnines wo/ linux not yet implemented", title="os.system")
         else:
-            HF.msg_box(text='Subject details are not available!', title='Detail file not found')
+            Output.msg_box(text="Subject details are not available!", title="Detail file not found")
 
     def run_rename_folders(self):
         """Renames all folders with a similar prefix; After that manual reloading is necessary"""
@@ -181,16 +184,17 @@ class GuiTabGeneral(QWidget):
         function as in GUITabPreprocessANTs.py."""
 
         if not self.selected_subj_Gen:
-            HF.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
+            Output.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
                        title="No subject selected")
             return
         elif len(self.selected_subj_Gen) > 1:
-            HF.msg_box(text="Please select one folder to avoid excessive image load", title="Number of selected files")
+            Output.msg_box(text="Please select only one folder to avoid excessive image load",
+                           title="Number of selected files")
             return
         else:
-            image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_Gen[0])
+            image_folder = os.path.join(self.cfg['folders']['nifti'], self.selected_subj_Gen[0])
 
-        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
+        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui='displayNiftiFiles')
         self.SelectFiles.show()
 
     def run_DCM2NII(self):

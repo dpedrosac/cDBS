@@ -1,1 +1,0 @@
-[{"electrode_diamater": [], "electrode_color": [0.1171875, 0.5625, 1], "active_contact_color": [1, 0.83984375, 0], "alpha": 0.9, "metal_color": [0.75, 0.75, 0.75], "r3polynomial": 

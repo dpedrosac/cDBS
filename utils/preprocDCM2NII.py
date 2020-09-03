@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import time
-import utils.HelperFunctions as HF
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 import pandas as pds
 import multiprocessing as mp
 from dependencies import ROOTDIR
@@ -18,30 +18,30 @@ class PreprocessDCM:
 
     def __init__(self, _folderlist):
         self.logfile = True
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = Configuration.load_config(ROOTDIR)
         self.DCM2NIIX_ROOT = os.path.join(ROOTDIR, 'ext', 'dcm2niix')
 
-        if not os.path.isdir(self.cfg["folders"]["dicom"]):
-            HF.msg_box(text="Please indicate a correct folder in the main GUI", title="Wrong folder")
+        if not os.path.isdir(self.cfg['folders']['dicom']):
+            Output.msg_box(text="Please indicate a correct folder in the main GUI", title="Wrong folder")
         else:
-            self.inputdir = self.cfg["folders"]["dicom"]
+            self.inputdir = self.cfg['folders']['dicom']
 
         subjlist = self.create_subjlist(_folderlist)
 
         if not os.path.isdir(self.DCM2NIIX_ROOT):
-            HF.LittleHelpers.msg_box(text="Extracting imaging data from DICOM files unsuccessful because of wrong "
-                                          "folder for dcm2niix.", title="Wrong folder!")
+            Output.msg_box(text="Extracting imaging data from DICOM-files not successful because of wrong "
+                                          "folder for 'dcm2niix'.", title="Wrong folder!")
             return
 
-        if not os.path.isdir(self.cfg["folders"]["nifti"]):
-            print('\nDirectory for output is invalid; assuming same base and creating folder named "NIFTI" therein!')
-            self.outdir = os.path.join(os.path.split(self.inputdir)[0], "NIFTI")
+        if not os.path.isdir(self.cfg['folders']['nifti']):
+            print("\nDirectory for output is invalid; assuming same base and creating folder named 'nifti' therein!")
+            self.outdir = os.path.join(os.path.split(self.inputdir)[0], 'nifti')
             if not os.path.isdir(self.outdir):
                 os.mkdir(self.outdir)
         else:
-            self.outdir = self.cfg["folders"]["nifti"]
+            self.outdir = self.cfg['folders']['nifti']
 
-        lastsubj = self.get_index_nifti_folders(self.outdir, prefix=self.cfg["folders"]["prefix"])
+        lastsubj = self.get_index_nifti_folders(self.outdir, prefix=self.cfg['folders']['prefix'])
 
         self.create_csv_subjlist(subjlist, int(lastsubj))
         self.convert_dcm2nii(subjlist, last_idx=int(lastsubj))
@@ -71,8 +71,8 @@ class PreprocessDCM:
         for p in processes:
             p.join()
 
-        print('\nIn total, a list of {} subjects was created'.format(len(dicomfolders)))
-        print('\nData extraction took {:.2f}secs.'.format(time.time() - start_multi), end='', flush=True)
+        print("\nIn total, a list of {} subjects was created".format(len(dicomfolders)))
+        print("\nData extraction took {:.2f}secs.".format(time.time() - start_multi), end='', flush=True)
         print()
 
     def dcm2niix_multiprocessing(self, name_subj, no_subj, dcm2niix_bin, last_idx, total_subj, status):
@@ -82,34 +82,34 @@ class PreprocessDCM:
         # general settings for the extraction to work and log data
         modalities = ['CT', 'MRI']
         if self.logfile:
-            log_filename = os.path.join(ROOTDIR, 'logs', "log_DCM2NII_" + str(no_subj + last_idx) +
+            log_filename = os.path.join(ROOTDIR, 'logs', 'log_DCM2NII_' + str(no_subj + last_idx) +
                                         time.strftime("%Y%m%d-%H%M%S"))
         else:
             log_filename = os.devnull
 
-        subj_outdir = os.path.join(self.outdir, self.cfg["folders"]["prefix"] + str(no_subj + last_idx))
+        subj_outdir = os.path.join(self.outdir, self.cfg['folders']['prefix'] + str(no_subj + last_idx))
 
-        HF.LittleHelpers.create_folder(subj_outdir)
+        FileOperations.create_folder(subj_outdir)
         start_time_subject = time.time()
         keptfiles, deletedfiles = ([] for i in range(2))
 
         for mod in modalities:
             status.put((name_subj, mod, no_subj, total_subj))
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
-            input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and "100" in f.path)]
+            input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and '100' in f.path)]
             if type(input_folder_files) == list:
                 input_folder_files = ''.join(input_folder_files)
 
             orig_stdout = sys.stdout
             sys.stdout = open(log_filename, 'w')
             subprocess.call([dcm2niix_bin,
-                             '-b', self.cfg["preprocess"]["dcm2nii"]["BIDSsidecar"][0],
-                             '-z', self.cfg["preprocess"]["dcm2nii"]["OutputCompression"][0],
-                             '-f', self.cfg["preprocess"]["dcm2nii"]["OutputFileStruct"],
+                             '-b', self.cfg['preprocess']['dcm2nii']['BIDSsidecar'][0],
+                             '-z', self.cfg['preprocess']['dcm2nii']['OutputCompression'][0],
+                             '-f', self.cfg['preprocess']['dcm2nii']['OutputFileStruct'],
                              '-o', subj_outdir,
-                             '-w', str(self.cfg["preprocess"]["dcm2nii"]["NameConflicts"]),
-                             '-v', str(self.cfg["preprocess"]["dcm2nii"]["Verbosity"]),
-                             '-x', str(self.cfg["preprocess"]["dcm2nii"]["ReorientCrop"]),
+                             '-w', str(self.cfg['preprocess']['dcm2nii']['NameConflicts']),
+                             '-v', str(self.cfg['preprocess']['dcm2nii']['Verbosity']),
+                             '-x', str(self.cfg['preprocess']['dcm2nii']['ReorientCrop']),
                              input_folder_files],
                             stdout=sys.stdout, stderr=subprocess.STDOUT)
             sys.stdout.close()
@@ -126,15 +126,15 @@ class PreprocessDCM:
                     len(set(deletedfiles)),
                     '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(deletedfiles)))),
                     time.time() - start_time_subject)
-        HF.LittleHelpers.logging_routine(text=HF.LittleHelpers.split_lines(log_text), cfg=self.cfg,
-                                         subject=self.cfg["folders"]["prefix"] + str(no_subj), module='dcm2nii',
-                                         opt=self.cfg["preprocess"]["dcm2nii"], project="")
+        Output.logging_routine(text=Output.split_lines(log_text), cfg=self.cfg,
+                                         subject=self.cfg['folders']['prefix'] + str(no_subj), module='dcm2nii',
+                                         opt=self.cfg['preprocess']['dcm2nii'], project="")
 
     def create_csv_subjlist(self, subjlist, first_index):
         """ this function creates a csv-files which aims at providing information about which name/pseudnonym, etc.
          corresponds to the respective subject in the NIFTI-folders"""
 
-        subjlist_filename = os.path.join(self.cfg["folders"]["nifti"], 'subjdetails.csv')
+        subjlist_filename = os.path.join(self.cfg['folders']['nifti'], 'subjdetails.csv')
         if not os.path.isfile(subjlist_filename):
             df_save = pds.DataFrame(columns=['name', 'folder'])
         else:
@@ -143,7 +143,7 @@ class PreprocessDCM:
         dtemp = {'name': [], 'folder': []}
         for idx, name in enumerate(subjlist, start=first_index + 1):
             dtemp['name'].append(name)
-            dtemp['folder'].append(self.cfg["folders"]["prefix"] + str(idx))
+            dtemp['folder'].append(self.cfg['folders']['prefix'] + str(idx))
 
         df_new = pds.DataFrame(dtemp, columns=['name', 'folder'])
         df_save = df_save.append(df_new)
@@ -156,7 +156,7 @@ class PreprocessDCM:
         import glob
 
         allsequences = glob.glob(os.path.join(subj_outdir, '*'))
-        regex_complete = self.cfg["preprocess"]["dcm2nii"]["IncludeFiles"].split(",")
+        regex_complete = self.cfg['preprocess']['dcm2nii']['IncludeFiles'].split(",")
         regex_complete += ['~SCOUT', '~AAH', '~REFORMATION']
 
         r = re.compile(r"^~.*")
@@ -184,14 +184,12 @@ class PreprocessDCM:
         """ returns the location of the dcm2niix files for different operating systems; this is identical with:
         https://github.com/devhliu/intelligentLiver/blob/master/dcmconv/dcm2niix.py"""
 
-        if sys.platform == 'win32':
-            dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'dcm2niix.exe')
-        elif sys.platform == 'linux':
-            dcm2niix_bin = "dcm2niix"
+        if sys.platform == 'linux':
+            dcm2niix_bin = 'dcm2niix'
         elif (sys.platform == 'macos' or sys.platform == 'darwin'):
             dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'macos', 'dcm2niix')
         else:
-            print('Chris Rordens dcm2niix routine not found, please make sure it is available.', end='', flush=True)
+            print("Chris Rordens dcm2niix routine not found, please make sure it is available.", end='', flush=True)
             dcm2niix_bin = False
 
         return dcm2niix_bin
@@ -217,12 +215,11 @@ class PreprocessDCM:
                                                                    len(os.listdir(os.path.join(niftidir, subdir))) > 0)]
         try:
             all_endings = [int(re.search(r'(' + prefix + ')(\w+)', x).group(2)) for x in list_dirs]
+            if not all_endings:
+                idx = 0
+            else:
+                idx = sorted(all_endings)[-1]
         except ValueError:
             idx = 0
-
-        if not all_endings:
-            idx = 0
-        else:
-            idx = sorted(all_endings)[-1]
 
         return idx
