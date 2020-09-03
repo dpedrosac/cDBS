@@ -2,35 +2,35 @@
 # -*- coding: utf-8 -*-
 
 import os
+
 import yaml
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
-import utils.HelperFunctions as HF
-from GUI.GuiTwoLists_generic import TwoListGUI
-from utils.settingsLeadDetection import GuiLeadDetection
-import utils.preprocLeadCT as LeadDetectionRoutines
-import utils.elecModel_manualcorrection as plotElecModel
+
 import private.allToolTips as setToolTips
+import utils.elecModel_manualcorrection as plotElecModel
+import utils.preprocLeadCT as LeadDetectionRoutines
+from utils.HelperFunctions import Output, Configuration, FileOperations
+from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
+from utils.settingsLeadDetection import GuiLeadDetection
+
 
 class GuiTabDetectLeads(QWidget):
     """Tab with options for detecting leads within the (pre-processed and registered) CT imaging"""
 
-    def __init__(self, parent=None, ROOTDIR=''):
+    def __init__(self, parent=None):
         super(GuiTabDetectLeads, self).__init__(parent)
         self.selected_subj_ANT = ''
 
         # General settings/variables/helper files needed needed at some point
-        if not ROOTDIR:
-            from dependencies import ROOTDIR
-
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR) # load configuration file/options from file
-        if os.path.isdir(self.cfg["folders"]["nifti"]):
-            self.niftidir = self.cfg["folders"]["nifti"]
+        self.cfg = Configuration.load_config(ROOTDIR)
+        if os.path.isdir(self.cfg['folders']['nifti']):
+            self.niftidir = self.cfg['folders']['nifti']
         else:
             self.niftidir = os.getcwd()
-        self.cfg["folders"]["rootdir"] = ROOTDIR
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        self.cfg['folders']['rootdir'] = ROOTDIR
+        Configuration.save_config(ROOTDIR, self.cfg)
 
         self.lay = QHBoxLayout(self)
         self.tab = QWidget()
@@ -41,14 +41,14 @@ class GuiTabDetectLeads(QWidget):
         self.tab.setLayout(self.tab.layout)
 
         # ------------------------- Upper left part (Folder)  ------------------------- #
-        self.FolderboxTab = QGroupBox("Directory (Bugra-Files)")
+        self.FolderboxTab = QGroupBox("Directory")
         self.HBoxUpperLeftTab = QVBoxLayout(self.FolderboxTab)
         self.lblWdirTab = QLabel('wDIR: {}'.format(self.niftidir))
         self.HBoxUpperLeftTab.addWidget(self.lblWdirTab)
-        #TODO: is it possible to summarize the working directoy ? If the path is too long the list of available subjects gets too small
+
         self.btnChangeWdir = QPushButton('Change working directory')
         self.btnChangeWdir.clicked.connect(self.change_wdir)
-        #if changing folder is canceled, the whole script shuts down (macOS Catalina)
+        # if changing folder is canceled, the whole script shuts down (macOS Catalina)
         self.btnReloadFilesTab = QPushButton('Reload files')
         self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
 
@@ -84,16 +84,16 @@ class GuiTabDetectLeads(QWidget):
         self.btn_QC_LeadDetect.setToolTip(setToolTips.compareNIFTIfiles())
         self.btn_QC_LeadDetect.clicked.connect(self.VisualiseLeadDetection)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
-#        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
-        #TODO: whatsoever (?); accurate
-        #TODO: view available (...); in tooltips correction instaed of correcion
-        #TODO: additionally.view available in General -> tooltips: subject instead of just subj
+        #        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
+        # TODO: whatsoever (?); accurate
+        # TODO: view available (...); in tooltips correction instaed of correcion
+        # TODO: additionally.view available in General -> tooltips: subject instead of just subj
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
         self.HBoxUpperRightTab = QVBoxLayout(self.listbox)
         self.availableNiftiTab = QListWidget()
         self.availableNiftiTab.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        itemsTab = HF.list_folders(self.niftidir, prefix=self.cfg["folders"]["prefix"])
+        itemsTab = FileOperations.list_folders(self.niftidir, prefix=self.cfg['folders']['prefix'])
         self.add_available_items(self.availableNiftiTab, itemsTab, msg='no')
         self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
 
@@ -118,22 +118,21 @@ class GuiTabDetectLeads(QWidget):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
-        self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of nii-files')
+        self.niftidir = QFileDialog.getExistingDirectory(self, "Please select the directory of nii-files")
 
-        if not self.niftidir == "":
+        if not self.niftidir == '':
             self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
 
-            self.cfg["folders"]["nifti"] = self.niftidir
+            self.cfg['folders']['nifti'] = self.niftidir
             with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
                 yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
-                               explicit_start=True, allow_unicode=True, encoding='utf-8') # saves new folder to yaml-file
+                               explicit_start=True, allow_unicode=True, encoding='utf-8')  # saves folder to yaml-file
 
             self.availableNiftiTab.clear()
-            itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], self.cfg["folders"]["prefix"])
+            itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], self.cfg['folders']['prefix'])
             self.add_available_items(self.availableNiftiTab, itemsChanged)
         else:
-            self.niftidir = self.cfg["folders"]["nifti"]
-
+            self.niftidir = self.cfg['folders']['nifti']
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is
@@ -145,30 +144,29 @@ class GuiTabDetectLeads(QWidget):
 
             for i in range(len(items)):
                 self.selected_subj_ANT.append(str(self.availableNiftiTab.selectedItems()[i].text()))
-        #            print(self.selected_subj_Gen)
 
     def add_available_items(self, sending_list, items, msg='yes'):
         """adds the available subjects in the working directory into the items list;
         an error message is dropped if none available"""
 
         if len(items) == 0 and msg == 'yes':
-            buttonReply = QMessageBox.question(self, 'No files in dir', 'There are no subjects available '
-                                                                        'in the current working directory ({}). Do you want to '
-                                                                        ' change to a different one?'.format(self.niftidir),
+            buttonReply = QMessageBox.question(self, "No files in directory", "There are no subjects available in "
+                                                                              "current working dir: ({}). Change to"
+                                                                              " different one?".format(self.niftidir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_wdir()
         else:
             items = list(items)
-            items.sort(key=lambda fname: int(fname.split(self.cfg["folders"]["prefix"])[1]))
+            items.sort(key=lambda fname: int(fname.split(self.cfg['folders']['prefix'])[1]))
             sending_list.addItems(items)
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
-        self.cfg = HF.LittleHelpers.load_config(self.cfg["folders"]["rootdir"])
+        self.cfg = Configuration.load_config(self.cfg['folders']['rootdir'])
         self.availableNiftiTab.clear()
 
-        itemsChanged = HF.list_folders(self.cfg["folders"]["nifti"], prefix=self.cfg["folders"]["prefix"])
+        itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     # Separate functions/GUIs that may be initialised here
@@ -177,8 +175,8 @@ class GuiTabDetectLeads(QWidget):
         https://github.com/adhusch/PaCER/"""
 
         if len(self.selected_subj_ANT) > 1:
-            HF.msg_box(text="Please select only one subject, as multiprocessing for lead detection is not intended",
-                                     title="Too many subjects selected")
+            Output.msg_box(text="Please select only one subject, as multiprocessing for lead detection is not intended",
+                           title="Too many subjects selected")
             return
         else:
             msg = "Are you sure you want to process the following subject:\n\n" \
@@ -191,18 +189,15 @@ class GuiTabDetectLeads(QWidget):
         """wrapper which starts the plotting routine for the detected lead which enables manual corrections"""
 
         if len(self.selected_subj_ANT) != 1:
-            HF.msg_box(text="Please select one and only one subject",
-                                     title="Subjects selected")
+            Output.msg_box(text="Please select one and only one subject", title="Subjects selected")
             return
         else:
             msg = "Are you sure you want to process the following subject:\n\n" \
                   "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
             ret = QMessageBox.question(self, 'MessageBox', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                plotElecModel.PlotRoutines(subject=self.selected_subj_ANT[0], inputfolder=os.path.join(self.niftidir,
-                                                                                      self.selected_subj_ANT[0]))
-
-
+                plotElecModel.PlotRoutines(subject=self.selected_subj_ANT[0],
+                                           inputfolder=os.path.join(self.niftidir, self.selected_subj_ANT[0]))
 
     def run_PreferencesLeadDetection(self):
         """change settings for the Lead detection routines, that is settings for PaCER """
@@ -213,15 +208,16 @@ class GuiTabDetectLeads(QWidget):
         """wrapper to start comparisons between pre- and post-processed images after N4BiasCorrection"""
 
         if not self.selected_subj_ANT:
-            HF.msg_box(text="No folder selected. To proceed, please select at least one.", title="No subject selected")
+            Output.msg_box(text="No folder selected. To proceed, please select at least one.",
+                           title="No subject selected")
             return
         elif len(self.selected_subj_ANT) > 1:
-            HF.msg_box(text="Please select only one subj.", title="Too many subjects selected")
+            Output.msg_box(text="Please select only one subj.", title="Too many subjects selected")
             return
         else:
-            image_folder = os.path.join(self.cfg["folders"]["nifti"], self.selected_subj_ANT[0]) # Is the index necessary
+            image_folder = os.path.join(self.cfg['folders']['nifti'], self.selected_subj_ANT[0])
 
-        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui="displayNiftiFiles")
+        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui='displayNiftiFiles')
         self.SelectFiles.show()
 
 

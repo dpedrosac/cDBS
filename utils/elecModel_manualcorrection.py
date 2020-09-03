@@ -2,31 +2,23 @@
 # -*- coding: utf-8 -*-
 
 import os
-import warnings
-import re
-import ants
-import scipy
-import math
-import time
-import utils.HelperFunctions as HF
 import pickle
-import matplotlib
+
 import h5py
-from sklearn.decomposition import PCA
-import numpy as np
-from skimage.measure import regionprops, label
-from scipy import ndimage
-from dependencies import ROOTDIR
-import scipy.io as spio
-from matplotlib import pyplot as plt
+import matplotlib
 import matplotlib.gridspec as gridspec
+import numpy as np
+from matplotlib import pyplot as plt
+
+from dependencies import ROOTDIR
+from utils.HelperFunctions import Output, Configuration
 
 
 class PlotRoutines:
     """plots the results from the electrode reconstruction/model creation in order to validate the results"""
 
     def __init__(self, subject, inputfolder=''):
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = Configuration.load_config(ROOTDIR)
         self.debug=False
         self.visualise_wrapper(subject, inputfolder)
 
@@ -35,10 +27,10 @@ class PlotRoutines:
 
         filename_elecmodel = os.path.join(inputfolder, 'elecModels_' + subject + '.pkl')
         if not inputfolder:
-            HF.msg_box(text="No input folder provided, please double-check!")
+            Output.msg_box(text="No input folder provided, please double-check!")
             return
         elif not os.path.isfile(filename_elecmodel):
-            HF.msg_box(text="models for electrode not available, please run detection first!")
+            Output.msg_box(text="models for electrode not available, please run detection first!")
             return
         else:
             with open(filename_elecmodel, "rb") as model: # roughly ea_loadreconstruction in the LeadDBS script
@@ -56,16 +48,16 @@ class PlotRoutines:
 
         elplot = False
 
-        lead_type = elecModels[0]["lead_type"]
-        if lead_type == 'BSc-2202 (direct.)':
+        lead_type = elecModels[0]['model']
+        if lead_type == 'Boston Vercise Directional':
             mat_filename = 'boston_vercise_directed.mat'
         else:
-            HF.msg_box("Not yet implemented")
+            Output.msg_box("Not yet implemented")
             return
 
-        lead_properties = h5py.File(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')["electrode"]
-        default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith("position")}
-        default_lead_coords_mm = np.array(lead_properties["coords_mm"]).T
+        lead_properties = h5py.File(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
+        default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
+        default_lead_coords_mm = np.array(lead_properties['coords_mm']).T
 
         markers_orig, markers, trajectory, lead_dist = [[] for _ in range(4)]
         for idx, e in enumerate(elecModels):
@@ -120,7 +112,7 @@ class PlotRoutines:
         if resize:
             can_dist = np.linalg.norm(lead_positions["head_position"] - lead_positions["tail_position"])
 
-            if lead_type == 'BSc-2202 (direct.)' | 'STJ-6172' | 'STJ-6173':
+            if lead_type == 'Boston Vercise Directional' or 'STJ-6172' or 'STJ-6173':
                 coords_temp = np.zeros((4,3))
                 coords_temp[0,:] = lead_coords_mm[0,:]
                 coords_temp[1,:] = np.mean(lead_coords_mm[1: 4,:], axis=0)

@@ -102,13 +102,15 @@ class GuiLeadDetection(QWidget):
 
         self.labelLeadType = QLabel('Implanted lead?\t\t')
         self.lineLeadType = QComboBox()
-        allowable_methods = [
-            "MDT-3387",
-            "MDT-3389",
-            "BSc-2201 (non-direct.)",
-            "BSc-2202 (direct.)"
+        allowable_leads = [
+            "Medtronic 3387",
+            "Medtronic 3389",
+            "Boston Vercise Directional",
+            "Boston Vercise Nondirectional",
+            "St Jude 6172",
+            "St Jude 6173"
         ]
-        [self.lineLeadType.addItem(x) for x in allowable_methods]
+        [self.lineLeadType.addItem(x) for x in allowable_leads]
         idx_method = self.lineLeadType.findText(self.cfg["lead_detection"]["PaCER"]["lead_type"],
                                                 QtCore.Qt.MatchFixedString)
         if idx_method >= 0:

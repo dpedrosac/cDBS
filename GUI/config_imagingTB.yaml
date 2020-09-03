@@ -7,34 +7,48 @@ folders:
   prefix: subj
   rootdir: /media/storage/cDBS
 preprocess:
+  dcm2nii:
+      BIDSsidecar: 'yes'
+      OutputCompression: 'no'
+      OutputFileStruct: '%p_%d'
+      NameConflicts: 2
+      Verbosity: 1
+      IncludeFiles: "T1_,T2_,ep2d_,H30,~SW[)],~12cha"
+      ReorientCrop: 'no'
   ANTsN4:
-    bspline-fitting: 200
-    convergence:
-    - 100
-    - 100
-    - 100
-    - 100
-    denoise: 'no'
-    dti_prefix: ep2d
-    prefix: bc_
-    shrink-factor: 4
-    threshold: 1.0e-07
-  Registration:
-    denoise: 'no'
-    dimensionality_coregister: 3
-    dimensionality_denoise: 3
+      prefix: 'bc_'
+      denoise: 'no'
+      shrink-factor: 4
+      bspline-fitting: 200
+      convergence:
+        - 50
+        - 50
+        - 50
+        - 50
+      threshold: 1e-7
+      dti_prefix: 'ep2d'
+  registration:
+    default_registration: 'yes'
+    registration_method: 'SyNRA'
+    metric:
+    - mattes
+    - GC
+    prefix: reg_
     resample_method: '0'
     resample_spacing: '0.7'
-    use-histogram-matching: true
-    winsorize-imageintensities:
-    - 0.005
-    - 0.005
-  dcm2nii:
-    BIDSsidecar: 'yes'
-    IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
-    NameConflicts: 2
-    OutputCompression: 'no'
-    OutputFileStruct: '%p_%d'
-    ReorientCrop: 'no'
-    Verbosity: 1
-  metdata: patients.xlsx
+    custom_registration_file: 'cmdline_ANTsRegistration.txt'
+  normalisation:
+    prefix: norm_
+    template_image: mni_icbm152_nlin_asym_09b
+    sequences: 'T1_,T2_,PD_'
+lead_detection:
+  PaCER:
+    metal_threshold: '800'
+    snr_threshold: '1500'
+    lambda: '25'
+    probabilistic_mask: 'yes'
+    detection_method: 'contactAreaCenter'
+    lead_type: 'Boston Vercise Directional'
+    transformation_matrix: 'no'
+
+  metdata: "patients.xlsx"
