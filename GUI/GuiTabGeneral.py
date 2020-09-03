@@ -12,7 +12,7 @@ from utils.settingsRenameFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
 import private.allToolTips as setToolTips
-
+import sys
 
 class GuiTabGeneral(QWidget):
     """General tab which enables import of DICOM files but also a set of distinct options such as viewing the
@@ -168,7 +168,8 @@ class GuiTabGeneral(QWidget):
             if sys.platform == 'linux':
                 subprocess.Popen(['xdg-open', ''.join(fileName)])
             else:
-                ['open', ''.join(fileName)] # TODO: implement xdg-open in macos and put the command in the install routine
+                #(['open', ''.join(fileName)]) # TODO: implement xdg-open in macos and put the command in the install routine
+                os.system('open"%s"'%fileName)
                 #Output.msg_box(text="opening csv-files on machnines wo/ linux not yet implemented", title="os.system")
         else:
             Output.msg_box(text="Subject details are not available!", title="Detail file not found")

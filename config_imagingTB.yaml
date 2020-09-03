@@ -1,11 +1,11 @@
 ---
 folders:
-  dicom: /media/storage/cDBS/data/DICOM
-  nifti: /media/storage/cDBS/data/NIFTI
+  dicom: /Users/Bugrahan/PycharmProjects/cDBS/data/nifti
+  nifti: /Users/Bugrahan/PycharmProjects/cDBS/data/nifti
   path2itksnap: ''
   path2slicer: ''
   prefix: subj
-  rootdir: /media/storage/cDBS
+  rootdir: /Users/Bugrahan/PycharmProjects/cDBS
 lead_detection:
   PaCER:
     detection_method: contactAreaCenter
@@ -28,7 +28,7 @@ preprocess:
     dti_prefix: ep2d
     prefix: bc_
     shrink-factor: 4
-    threshold: 1e-7
+    threshold: 1.0e-07
   dcm2nii:
     BIDSsidecar: 'yes'
     IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
