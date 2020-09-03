@@ -169,7 +169,7 @@ class GuiTabGeneral(QWidget):
                 subprocess.Popen(['xdg-open', ''.join(fileName)])
             else:
                 #(['open', ''.join(fileName)]) # TODO: implement xdg-open in macos and put the command in the install routine
-                os.system('open"%s"'%fileName)
+                os.system('open', ''.join(fileName))
                 #Output.msg_box(text="opening csv-files on machnines wo/ linux not yet implemented", title="os.system")
         else:
             Output.msg_box(text="Subject details are not available!", title="Detail file not found")
