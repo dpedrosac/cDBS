@@ -3,8 +3,9 @@
 
 import os
 import pickle
+import scipy
 
-import h5py
+from mat4py import loadmat
 import matplotlib
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -55,9 +56,9 @@ class PlotRoutines:
             Output.msg_box("Not yet implemented")
             return
 
-        lead_properties = h5py.File(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
+        lead_properties = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
         default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
-        default_lead_coords_mm = np.array(lead_properties['coords_mm']).T
+        default_lead_coords_mm = np.array(lead_properties['coords_mm'])
 
         markers_orig, markers, trajectory, lead_dist = [[] for _ in range(4)]
         for idx, e in enumerate(elecModels):
@@ -67,8 +68,8 @@ class PlotRoutines:
                 resize=True
             else: resize=False
 
-            _, trajectory_temp, markers_temp, _ = self.resolve_coordinates(markers_orig, default_lead_coords_mm,
-                                                                     default_lead_pos, lead_type, resize=resize)
+            _, trajectory_temp, _ = self.resolve_coordinates(markers_orig[idx], default_lead_coords_mm,
+                                                                           default_lead_pos, lead_type, resize=resize)
             trajectory.append(trajectory_temp)
 
             xvec, yvec, markers_temp, normtraj_vector = self.determine_rotation(e, markers_temp)
@@ -80,11 +81,11 @@ class PlotRoutines:
 
             markers.append(markers_temp)
             _, _, _, can_eldist = self.resolve_coordinates(markers_orig, default_lead_coords_mm,
-                                                       default_lead_pos, lead_type, resize=resize)
+                                                           default_lead_pos, lead_type, resize=resize)
             lead_dist.append(can_eldist)
 
-        _, trajectory_temp, markers_temp, _ = self.resolve_coordinates(markers_orig, default_lead_coords_mm, default_lead_pos,
-                                                       lead_type, resize=resize, rszfactor=np.mean(can_eldist))
+        _, trajectory_temp, _ = self.resolve_coordinates(markers_orig, default_lead_coords_mm, default_lead_pos,
+                                                                       lead_type, resize=resize, rszfactor=np.mean(can_eldist))
 
         mainax1 = fig.add_subplot(grid[:-1, 1:3])
         mainax2 = fig.add_subplot(grid[:-1, 4:6])
@@ -104,25 +105,24 @@ class PlotRoutines:
 
 
 
-    def resolve_coordinates(self, markers, lead_coords_mm, lead_positions, lead_type, resize=False, rszfactor=0):
-        """emulates the function from Lead-DBS ea_resolvecoords cf.
+    def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_type, resize=False, rszfactor=0):
+        """emulates the function from Lead-DBS ea_resolvecoords; unlike in Lead DBS this is done one at a time cf.
         https://github.com/netstim/leaddbs/blob/master/templates/electrode_models/ea_resolvecoords.m"""
-        from sklearn.metrics.pairwise import euclidean_distances
 
         if resize:
             can_dist = np.linalg.norm(lead_positions["head_position"] - lead_positions["tail_position"])
 
-            if lead_type == 'Boston Vercise Directional' or 'STJ-6172' or 'STJ-6173':
+            if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
                 coords_temp = np.zeros((4,3))
                 coords_temp[0,:] = lead_coords_mm[0,:]
                 coords_temp[1,:] = np.mean(lead_coords_mm[1: 4,:], axis=0)
                 coords_temp[2,:] = np.mean(lead_coords_mm[4: 7,:], axis=0)
                 coords_temp[3, :] = lead_coords_mm[7, :]
 
-                A = self.euclidean_distance_matrix(coords_temp)
+                A = scipy.spatial.distance.cdist(coords_temp, coords_temp, 'euclidean')
                 can_eldist = np.sum(np.sum(np.tril(np.triu(A,1),1)))/ 3
             else:
-                A = np.sqrt(euclidean_distances(lead_coords_mm, lead_coords_mm))  # TODO: Does this correspond to sqrt(ea_sqdist(lead_coords_mm', lead_coords_mm'));
+                A = np.sqrt(scipy.spatial.distance.cdist(lead_coords_mm, lead_coords_mm, 'euclidean'))  # TODO: lead_coords_mm does not correspond to electrode.coords_mm;
                 can_eldist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / 3 # TODO what is (options.elspec.numel -1)?? change code after finding out!!
 
             if rszfactor != 0:
@@ -130,35 +130,33 @@ class PlotRoutines:
             else:
                 stretch = can_dist
 
-            for idx in enumerate(markers):
-                vec = (markers[idx]["markers_tail"] - markers[idx]["markers_head"]) / \
-                      np.linalg.norm(markers[idx]["markers_tail"] - markers[idx]["markers_head"])
-                markers[idx]["markers_tail"] = markers[idx]["markers_head"] + vec * stretch
+            vec = (marker["markers_tail"] - marker["markers_head"]) / \
+                  np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
+            marker["markers_tail"] = marker["markers_head"] + vec * stretch
 
         coords, traj_vector, trajectory = [[] for _ in range(3)]
-        for idx, m in enumerate(markers):
-            if idx == 0 and not np.all(markers[idx]["markers_head"]==0):
-                M = np.stack((np.append(markers[idx]["markers_head"], 1), np.append(markers[idx]["markers_tail"], 1),
-                              np.append(markers[idx]["markers_x"], 1), np.append(markers[idx]["markers_y"], 1)))
-                E = np.stack((np.append(lead_positions["head_position"], 1), np.append(lead_positions["tail_position"], 1),
-                              np.append(lead_positions["x_position"], 1), np.append(lead_positions["y_position"], 1)))
+        if not np.all(marker["markers_head"]==0):
+            M = np.stack((np.append(marker["markers_head"], 1), np.append(marker["markers_tail"], 1),
+                          np.append(marker["markers_x"], 1), np.append(marker["markers_y"], 1)))
+            E = np.stack((np.append(lead_positions["head_position"], 1), np.append(lead_positions["tail_position"], 1),
+                          np.append(lead_positions["x_position"], 1), np.append(lead_positions["y_position"], 1)))
 
-                X = np.linalg.lstsq(E, M, rcond=None)
+            X = np.linalg.lstsq(E, M, rcond=None)
 
-                coords_mm = np.concatenate([lead_coords_mm, np.ones(shape=(lead_coords_mm.shape[0],1))], axis=1)
-                coords.append((coords_mm @ X[0]).T)
-                coords[idx] = coords[idx][0: 3,:]
+            coords_mm = np.concatenate([lead_coords_mm, np.ones(shape=(lead_coords_mm.shape[0],1))], axis=1)
+            coords = (coords_mm @ X[0]).T
+            coords = coords[0: 3,:].T
 
-                traj_vector.append((markers[idx]["markers_tail"] - markers[idx]["markers_head"]) / \
-                      np.linalg.norm(markers[idx]["markers_tail"] - markers[idx]["markers_head"]))
+            traj_vector = (marker["markers_tail"] - marker["markers_head"]) / \
+                               np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
 
-                trajectory.append(np.stack((markers[idx]["markers_head"] - traj_vector[idx]*5,
-                                   markers[idx]["markers_head"] + traj_vector[idx]*25)))
-                trajectory[idx] = np.array((np.linspace(trajectory[idx][0, 0], trajectory[idx][1, 0], num=50),
-                                            np.linspace(trajectory[idx][0, 1], trajectory[idx][1, 1], num=50),
-                                            np.linspace(trajectory[idx][0, 2], trajectory[idx][1, 2], num=50))).T
+            trajectory = np.stack((marker["markers_head"] - traj_vector*5,
+                                        marker["markers_head"] + traj_vector*25))
+            trajectory = np.array((np.linspace(trajectory[0, 0], trajectory[1, 0], num=50),
+                                   np.linspace(trajectory[0, 1], trajectory[1, 1], num=50),
+                                   np.linspace(trajectory[0, 2], trajectory[1, 2], num=50))).T
 
-        return coords, trajectory, markers, can_eldist
+        return coords, trajectory, can_eldist
 
 
     def determine_rotation(self, elecModel, marker):

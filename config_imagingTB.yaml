@@ -10,7 +10,7 @@ lead_detection:
   PaCER:
     detection_method: contactAreaCenter
     lambda: '25'
-    lead_type: BSc-2202 (direct.)
+    lead_type: Boston Vercise Directional
     metal_threshold: '800'
     probabilistic_mask: 'yes'
     snr_threshold: '1500'
