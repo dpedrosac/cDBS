@@ -131,7 +131,8 @@ class LeadWorks:
             initialPoly, tPerMm, skeleton, totalLengthMm = self.electrodePointCloudModelEstimate(leadPoints,
                                                                                                  CTimaging.spacing[2])
             mod, prof, skel = \
-                self.refitElec(initialPoly, leadPoints["points"], leadPoints["pixelValues"], CTspace=CTimaging.spacing)
+                self.refitElec(initialPoly, leadPoints['points'], leadPoints['pixelValues'],
+                               CTspace=CTimaging.spacing[2])
             elecModels.append(mod)
             intensityProfiles.append(prof)
             skelSkalms.append(skel)
@@ -597,7 +598,7 @@ class LeadWorks:
                 rms[idx] = float('inf')
 
         if np.all(np.isinf(distances)):
-            print("determineElectrodeType: Could NOT detect electrode type, thus contact detection might be flawed "
+            warnings.warn("\t\tCould NOT detect electrode type, thus contact detection might be flawed "
                   "(Low image resolution? Large slice thickness!?) Set electrode type manually to continue with data")
             elecStruct = electrodeGeometries[-1]
 
@@ -615,9 +616,9 @@ class LeadWorks:
         """function aiming at providing an overview of the results obtained"""
 
         items1 = 'lead_diameter', 'lead_color', 'active_contact_color', 'alpha', 'metal_color', \
-                 'r3polynomial', 'referenceTrajectory', 'leadInfo', 'activeContact', 'detectedContactPosition', \
-                 'useDetectedContactPosition', 'skeleton', 'contactPositions', 'getContactPositions3D', 'trajectory', \
-                 'markers_head', 'markers_tail', 'normtraj_vector', 'orth', 'markers_x', 'markers_y', 'rotation', \
+                 'r3polynomial', 'activeContact', 'detectedContactPosition', 'useDetectedContactPosition', \
+                 'skeleton', 'contactPositions', 'getContactPositions3D', 'trajectory', 'markers_head', \
+                 'markers_tail', 'normtraj_vector', 'orth', 'markers_x', 'markers_y', 'rotation', \
                  'manual_correction', 'first_run'
         refitReZeroedElecMod = {k: [] for k in items1}
 
@@ -633,7 +634,6 @@ class LeadWorks:
         refitReZeroedElecMod['UseDetectedContactPosition'] = False
         refitReZeroedElecMod['skeleton'] = self.create_skeleton(r3polynomial)
         refitReZeroedElecMod['contactPositions'] = .75, 2.75, 4.75, 6.75
-        refitReZeroedElecMod['apprTotalLengthMm'] = []
         refitReZeroedElecMod['activeContactPoint'] = []
 
         positions = self.invPolyArcLength3(r3polynomial, np.array(refitReZeroedElecMod['contactPositions']))
@@ -653,11 +653,10 @@ class LeadWorks:
         refitReZeroedElecMod['trajectory'] = np.array(trajectory).T
         refitReZeroedElecMod['markers_head'] = refitReZeroedElecMod['getContactPositions3D'][0, :]
         refitReZeroedElecMod['markers_tail'] = refitReZeroedElecMod['getContactPositions3D'][3, :]
-
-        refitReZeroedElecMod['normtraj_vector'] = (refitReZeroedElecMod['getContactPositions3D'][0, :] -
-                                                   refitReZeroedElecMod['getContactPositions3D'][3, :]) / \
-                                                  np.linalg.norm(refitReZeroedElecMod['getContactPositions3D'][0, :] -
-                                                                 refitReZeroedElecMod['getContactPositions3D'][3, :])
+        refitReZeroedElecMod['normtraj_vector'] = np.divide((refitReZeroedElecMod['markers_tail'] -
+                                                   refitReZeroedElecMod['markers_head']),
+                                                    np.linalg.norm(refitReZeroedElecMod['markers_tail'] -
+                                                   refitReZeroedElecMod['markers_head']))
         refitReZeroedElecMod['orth'] = np.multiply(self.null(refitReZeroedElecMod['normtraj_vector']),
                                                    (refitReZeroedElecMod['lead_diameter'] / 2))
         refitReZeroedElecMod['markers_x'] = refitReZeroedElecMod['getContactPositions3D'][0, :] + \

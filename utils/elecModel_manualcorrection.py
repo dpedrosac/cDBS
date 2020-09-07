@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import math
 import os
 import pickle
-import scipy
 
-from mat4py import loadmat
 import matplotlib
 import matplotlib.gridspec as gridspec
 import numpy as np
+import scipy
+from mat4py import loadmat
 from matplotlib import pyplot as plt
 
 from dependencies import ROOTDIR
@@ -23,80 +24,100 @@ class PlotRoutines:
         self.debug=False
         self.visualise_wrapper(subject, inputfolder)
 
-    def visualise_wrapper(self, subject, inputfolder):
+    def visualise_wrapper(self, subject, inputdir):
         """wrapper script for visualisation via pyplot from matplotlib routines"""
 
-        filename_elecmodel = os.path.join(inputfolder, 'elecModels_' + subject + '.pkl')
-        if not inputfolder:
-            Output.msg_box(text="No input folder provided, please double-check!")
-            return
-        elif not os.path.isfile(filename_elecmodel):
-            Output.msg_box(text="models for electrode not available, please run detection first!")
-            return
-        else:
-            with open(filename_elecmodel, "rb") as model: # roughly ea_loadreconstruction in the LeadDBS script
-                elecModels = pickle.load(model)
-                intensityProfiles = pickle.load(model)
-                skelSkalms = pickle.load(model)
+        filename_leadmodel = os.path.join(inputdir, 'elecModels_' + subject + '.pkl')
+        lead_models, intensityProfiles, skelSkalms = self.load_leadModel(inputdir=inputdir, filename=filename_leadmodel)
 
-        self.interactive_plot(elecModels, intensityProfiles, skelSkalms)
+        self.interactive_plot(lead_models, intensityProfiles, skelSkalms)
 
-    def interactive_plot(self, elecModels, intensityProfiles, skelSkalms):
-        """ start plotting routine according to Lead-DBS implementation [ea_autocoord and ea_manualreconstruction]"""
+    def interactive_plot(self, lead_models, intensityProfiles, skelSkalms):
+        """ Start plotting routine according to Lead-DBS implementation [ea_autocoord and ea_manualreconstruction]"""
 
+        # General plotting commands
         fig = plt.figure(facecolor=self.getbgsidecolor(side=0)) # TODO: is it really the side, what is this color actually
-        grid = gridspec.GridSpec(ncols=3, nrows=6, figure=fig)
-
-        elplot = False
-
-        lead_type = elecModels[0]['model']
-        if lead_type == 'Boston Vercise Directional':
+        grid = gridspec.GridSpec(ncols=6, nrows=6, figure=fig)
+        elplot = False # TODO: What this correpond to in the original code?
+        lead_type = lead_models[0]['model']
+        if lead_type == 'Boston Vercise Directional': # load mat-file to proceed
             mat_filename = 'boston_vercise_directed.mat'
         else:
-            Output.msg_box("Not yet implemented")
+            Output.msg_box(text="Lead type not yet implemented.", title="Lead type not implemented")
             return
 
         lead_properties = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
+        # TODO: is it necessary to save the default/pre values
         default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
         default_lead_coords_mm = np.array(lead_properties['coords_mm'])
 
-        markers_orig, markers, trajectory, lead_dist = [[] for _ in range(4)]
-        for idx, e in enumerate(elecModels):
-            markers_orig.append(dict([(k, r) for k, r in e.items() if k.startswith('marker')]))
+        marker_orig, coords = [[] for _ in range(2)]
+        for side, _ in enumerate(lead_models):
+            marker_orig.append(dict([(k, r) for k, r in lead_models[side].items() if k.startswith('marker')]))
 
-            if not (e["first_run"] & e["manual_correction"]):
+            resize = False
+            if not (lead_models[side]['first_run'] and lead_models[side]['manual_correction']):
                 resize=True
-            else: resize=False
+                lead_models[side]['first_run'] = False
 
-            _, trajectory_temp, _ = self.resolve_coordinates(markers_orig[idx], default_lead_coords_mm,
-                                                                           default_lead_pos, lead_type, resize=resize)
-            trajectory.append(trajectory_temp)
+            _, lead_models[side]['trajectory'], _, marker_temp = \
+                self.resolve_coordinates(marker_orig[side],default_lead_coords_mm,default_lead_pos, lead_type,
+                                                                                          resize_bool=resize) # according to line 51 of ea_macor_updatescene
+            # Start estimating the rotation with respect to y-Axis
+            lead_models[side]['rotation'] = self.initialise_rotation(lead_models[side], marker_temp)
+            xvec, yvec, lead_models[side]['rotation'], marker_rotation = self.estimate_rotation(lead_models[side],
+                                                                                                marker_temp)
+            lead_models[side] = self.marker_update(marker_rotation, lead_models[side])
 
-            xvec, yvec, markers_temp, normtraj_vector = self.determine_rotation(e, markers_temp)
+            if xvec.size == 0 or yvec.size == 0:
+                xvec, yvec, lead_models[side]['rotation'], marker_rotation = self.determine_rotation(lead_models[side],
+                                                                                                 marker_rotation)
+                lead_models[side] = self.marker_update(marker_rotation, lead_models[side])
 
-            xvec_unrot = np.cross(normtraj_vector, [1, 0, 0])
-            xvec_unrot = np.divide(xvec_unrot, np.linalg.norm(xvec_unrot))
-            yvec_unrot = np.cross(normtraj_vector, [0, 1, 0])
-            yvec_unrot = np.divide(yvec_unrot, np.linalg.norm(yvec_unrot))
+            xvec_temp = np.cross(lead_models[side]["normtraj_vector"], [1, 0, 0])
+            xvec_unrot = np.divide(xvec_temp, np.linalg.norm(xvec_temp))
+            yvec_temp = np.cross(lead_models[side]["normtraj_vector"], [0, 1, 0])
+            yvec_unrot = np.divide(yvec_temp, np.linalg.norm(yvec_temp))
 
-            markers.append(markers_temp)
-            _, _, _, can_eldist = self.resolve_coordinates(markers_orig, default_lead_coords_mm,
-                                                           default_lead_pos, lead_type, resize=resize)
-            lead_dist.append(can_eldist)
+            marker_temp = dict([(k, r) for k, r in lead_models[side].items() if k.startswith('marker')])
+            coords_temp, trajectory, _, _ = self.resolve_coordinates(marker_temp, default_lead_coords_mm,
+                                                           default_lead_pos, lead_type, resize_bool=False) # ea_mancor_updatescene line 144
+            coords.append(coords_temp)
 
-        _, trajectory_temp, _ = self.resolve_coordinates(markers_orig, default_lead_coords_mm, default_lead_pos,
-                                                                       lead_type, resize=resize, rszfactor=np.mean(can_eldist))
+        #TODO: elecModels should be updated somehow
 
         mainax1 = fig.add_subplot(grid[:-1, 1:3])
-        mainax2 = fig.add_subplot(grid[:-1, 4:6])
+        mainax2 = fig.add_subplot(grid[-1, 4:6])
 
+        for side, _ in enumerate(lead_models):
+            coords_temp, trajectory_temp, _, _ = self.resolve_coordinates(marker_temp, coords, default_lead_pos, # TODO what should coords be like?
+                                                                               lead_type, resize_bool=False)
+            coords
+
+        if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
+            coords_temp, A, emp_eldist = [dict() for _ in range(3)]
+            for side, _ in enumerate(lead_models):
+                coords_temp[side] = np.zeros((4,3))
+                coords_temp[side][0 ,:] = coords[side][0, :]
+                coords_temp[side][1, :] = np.mean(coords[side][1: 4, :], axis=0)
+                coords_temp[side][2, :] = np.mean(coords[side][4: 7, :], axis=0)
+                coords_temp[side][3, :] = coords[side][7, :]
+
+                A[side] = scipy.spatial.distance.cdist(coords_temp[side], coords_temp[side], 'euclidean')
+                emp_eldist[side] = np.sum(np.sum(np.tril(np.triu(A[side], 1), 1))) / 3
+        else:
+            A = np.sqrt(scipy.spatial.distance.cdist(coords, coords, 'euclidean'))
+            can_eldist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / 3  # TODO what is (options.elspec.numel -1)?? change code after finding out!!
+
+
+        marker_new = []
         if not elplot:
             cnt = 1
-            mplot1 = plt.scatter(markers[0]["markers_head"][0], markers[0]["markers_head"][1],
-                                 markers[0]["markers_head"][2], facecolor=None,
+            mplot1 = plt.scatter(marker_new[0]["markers_head"][0], marker_new[0]["markers_head"][1],
+                                 marker_new[0]["markers_head"][2], facecolor=None,
                                  marker='*', edgecolors=[0.9,0.2,0.2])
-            mplot2 = plt.scatter(markers[0]["markers_tail"][0], markers[0]["markers_tail"][1],
-                                 markers[0]["markers_tail"][2], facecolor=None,
+            mplot2 = plt.scatter(marker_new[0]["markers_tail"][0], marker_new[0]["markers_tail"][1],
+                                 marker_new[0]["markers_tail"][2], facecolor=None,
                                  marker='*', edgecolors=[0.2, 0.9, 0.2])
             elplot = []
             #for i in range(coords_mm.shape[0]):
@@ -105,11 +126,11 @@ class PlotRoutines:
 
 
 
-    def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_type, resize=False, rszfactor=0):
+    def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_type, resize_bool=False, rszfactor=0):
         """emulates the function from Lead-DBS ea_resolvecoords; unlike in Lead DBS this is done one at a time cf.
         https://github.com/netstim/leaddbs/blob/master/templates/electrode_models/ea_resolvecoords.m"""
 
-        if resize:
+        if resize_bool:
             can_dist = np.linalg.norm(lead_positions["head_position"] - lead_positions["tail_position"])
 
             if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
@@ -119,7 +140,7 @@ class PlotRoutines:
                 coords_temp[2,:] = np.mean(lead_coords_mm[4: 7,:], axis=0)
                 coords_temp[3, :] = lead_coords_mm[7, :]
 
-                A = scipy.spatial.distance.cdist(coords_temp, coords_temp, 'euclidean')
+                A = scipy.spatial.distance.cdist(coords_temp, coords_temp, 'euclidean') # move this part into helper function
                 can_eldist = np.sum(np.sum(np.tril(np.triu(A,1),1)))/ 3
             else:
                 A = np.sqrt(scipy.spatial.distance.cdist(lead_coords_mm, lead_coords_mm, 'euclidean'))  # TODO: lead_coords_mm does not correspond to electrode.coords_mm;
@@ -130,12 +151,12 @@ class PlotRoutines:
             else:
                 stretch = can_dist
 
-            vec = (marker["markers_tail"] - marker["markers_head"]) / \
-                  np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
+            vec = np.divide((marker["markers_tail"] - marker["markers_head"]),
+                            np.linalg.norm(marker["markers_tail"] - marker["markers_head"]))
             marker["markers_tail"] = marker["markers_head"] + vec * stretch
 
-        coords, traj_vector, trajectory = [[] for _ in range(3)]
-        if not np.all(marker["markers_head"]==0):
+        coords, traj_vector, trajectory, can_eldist = [[] for _ in range(4)]
+        if not marker["markers_head"].size==0:
             M = np.stack((np.append(marker["markers_head"], 1), np.append(marker["markers_tail"], 1),
                           np.append(marker["markers_x"], 1), np.append(marker["markers_y"], 1)))
             E = np.stack((np.append(lead_positions["head_position"], 1), np.append(lead_positions["tail_position"], 1),
@@ -148,38 +169,61 @@ class PlotRoutines:
             coords = coords[0: 3,:].T
 
             traj_vector = (marker["markers_tail"] - marker["markers_head"]) / \
-                               np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
+                          np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
 
             trajectory = np.stack((marker["markers_head"] - traj_vector*5,
-                                        marker["markers_head"] + traj_vector*25))
+                                   marker["markers_head"] + traj_vector*25))
             trajectory = np.array((np.linspace(trajectory[0, 0], trajectory[1, 0], num=50),
                                    np.linspace(trajectory[0, 1], trajectory[1, 1], num=50),
                                    np.linspace(trajectory[0, 2], trajectory[1, 2], num=50))).T
 
-        return coords, trajectory, can_eldist
+        return coords, trajectory, can_eldist, marker
 
+    def marker_update(self, marker_updated, lead_models):
+        """replaces values of lead_models with updated values """
+        for key_name, val in marker_updated.items():
+            lead_models[key_name] = val
+        return lead_models
 
-    def determine_rotation(self, elecModel, marker):
-        """script which determines the rotation according to the markers provided"""
+    def initialise_rotation(self, lead_models, marker):
+        """script which iniitalises the estimation of a rotation; this is necessary as at the beginning there is no
+        information available; This function is followed by estimate_rotation.py (see below)"""
 
-        rotation = elecModel["rotation"]
-        normtrajvector = elecModel["normtraj_vector"]
-        deg2rad = lambda x: np.pi * x / 180
+        if lead_models['manual_correction'] and not lead_models['rotation']:
+            vec_temp = marker['markers_y'] - marker['markers_head']
+            vec_temp[2] = 0
+            vec_temp = np.divide(vec_temp, np.linalg.norm(vec_temp))
+            initial_rotation = np.degrees(math.atan2(np.linalg.norm(np.cross([0,1,0], vec_temp)),
+                                                     np.dot([0,1,0], vec_temp)))
+            if marker['markers_y'][0] > marker['markers_head'][0]:
+                initial_rotation = - initial_rotation
+            rotation = initial_rotation
+        elif not lead_models['manual_correction'] and not lead_models['rotation']:
+            rotation = 0
+
+        return rotation
+
+    def estimate_rotation(self, lead_models, marker):
+        """script which determines the rotation according to the markers provided; this script includes all parts of
+        the determinatio of rotation included in ea_mancor_updatescene of the Lead-DBS package """
+
+        rotation = lead_models['rotation']
+        normtrajvector = lead_models["normtraj_vector"]
+
         yvec = np.zeros((3,1))
-        yvec[0] = -np.cos(0) * np.sin(deg2rad(rotation))
-        yvec[1] = (np.cos(0) * np.cos(deg2rad(rotation))) + (np.sin(0) * np.sin(deg2rad(rotation)) * np.sin(0))
-        yvec[2] = (-np.sin(0) * np.cos(deg2rad(rotation))) + (np.cos(0) * np.sin(deg2rad(rotation)) * np.sin(0))
+        yvec[0] = -np.cos(0) * np.sin(np.deg2rad(rotation))
+        yvec[1] = (np.cos(0) * np.cos(np.deg2rad(rotation))) + (np.sin(0) * np.sin(np.deg2rad(rotation)) * np.sin(0))
+        yvec[2] = (-np.sin(0) * np.cos(np.deg2rad(rotation))) + (np.cos(0) * np.sin(np.deg2rad(rotation)) * np.sin(0))
 
         xvec = np.cross(yvec.T, [0,0,1])
         xvec = xvec - (np.dot(xvec, normtrajvector) / np.linalg.norm(normtrajvector)**2) * normtrajvector
         xvec = np.divide(xvec, np.linalg.norm(xvec))
         yvec = -np.cross(xvec, normtrajvector)
-        yvec = -np.cross(xvec, normtrajvector)
 
-        marker["markers_x"] = marker["markers_head"] + (xvec * elecModel["lead_diameter"]/2)
-        marker["markers_y"] = marker["markers_head"] + (yvec * elecModel["lead_diameter"]/2)
+        marker['markers_x'] = marker['markers_head'] + (xvec * lead_models['lead_diameter'] / 2)
+        marker['markers_y'] = marker['markers_head'] + (yvec * lead_models['lead_diameter'] / 2)
 
-        return xvec, yvec, marker, normtrajvector
+        return xvec, yvec, rotation, marker
 
 
     @staticmethod
@@ -210,3 +254,36 @@ class PlotRoutines:
         col = line_cols[side,:] # TODO: why on earth is this so complicated to get these colors
 
         return col
+
+    @staticmethod
+    def load_leadModel(inputdir, filename):
+        """Function aiming at loading the lead models saved in preprocLead.py from this toolbox"""
+
+        if not inputdir:
+            Output.msg_box(text="No input folder provided, please double-check!", title="Missing input folder")
+            return
+        elif not os.path.isfile(filename):
+            Output.msg_box(text="Models for electrode not available, please run detection first!",
+                           title="Models not available")
+            return
+        else:
+            with open(filename, "rb") as model: # roughly ea_loadreconstruction in the LeadDBS script
+                lead_models = pickle.load(model)
+                intensityProfiles = pickle.load(model)
+                skelSkalms = pickle.load(model)
+
+        return lead_models, intensityProfiles, skelSkalms
+
+
+    @staticmethod
+    def save_elecModel(lead_models, intensityProfiles, skelSkalms, filename=''):
+
+        if not filename:
+            Output.msg_box(text="No filename for saving lead model provided", title="No filename provided")
+            return
+
+        with open(filename, "wb") as f:
+            pickle.dump(lead_models, f)
+            pickle.dump(intensityProfiles, f)
+            pickle.dump(skelSkalms, f)
+
