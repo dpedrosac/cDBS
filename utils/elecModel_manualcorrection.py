@@ -51,7 +51,7 @@ class PlotRoutines:
         default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
         default_lead_coords_mm = np.array(lead_properties['coords_mm'])
 
-        marker_orig, coords = [[] for _ in range(2)]
+        marker_orig, coords, trajectory = [[] for _ in range(3)]
         for side, _ in enumerate(lead_models):
             marker_orig.append(dict([(k, r) for k, r in lead_models[side].items() if k.startswith('marker')]))
 
@@ -80,37 +80,58 @@ class PlotRoutines:
             yvec_unrot = np.divide(yvec_temp, np.linalg.norm(yvec_temp))
 
             marker_temp = dict([(k, r) for k, r in lead_models[side].items() if k.startswith('marker')])
-            coords_temp, trajectory, _, _ = self.resolve_coordinates(marker_temp, default_lead_coords_mm,
+            coords_temp, traj_temp, _, _ = self.resolve_coordinates(marker_temp, default_lead_coords_mm,
                                                            default_lead_pos, lead_type, resize_bool=False) # ea_mancor_updatescene line 144
             coords.append(coords_temp)
-
+            trajectory.append(traj_temp)
         #TODO: elecModels should be updated somehow
 
         mainax1 = fig.add_subplot(grid[:-1, 1:3])
-        mainax2 = fig.add_subplot(grid[-1, 4:6])
+        mainax2 = fig.add_subplot(grid[-1, 4:6]) # TODO: Somethings wrong herewith the grid
+
+        emp_dist = [None]*len(lead_models)
+        if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
+            for side, _ in enumerate(lead_models):
+                coords_temp = np.zeros((4, 3))
+                coords_temp[0, :] = coords[side][0, :]
+                coords_temp[1, :] = np.mean(coords[side][1: 4, :], axis=0)
+                coords_temp[2, :] = np.mean(coords[side][4: 7, :], axis=0)
+                coords_temp[3, :] = coords[side][7, :]
+
+                emp_dist[side] = self.lead_dist(coords=coords_temp)
+        else:
+            emp_dist[side] = self.lead_dist(coords=coords, factor=lead_properties['numel'])
+
+        mean_empdist = np.mean(emp_dist)
 
         for side, _ in enumerate(lead_models):
-            coords_temp, trajectory_temp, _, _ = self.resolve_coordinates(marker_temp, coords, default_lead_pos, # TODO what should coords be like?
-                                                                               lead_type, resize_bool=False)
-            coords
-
-        if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
-            coords_temp, A, emp_eldist = [dict() for _ in range(3)]
-            for side, _ in enumerate(lead_models):
-                coords_temp[side] = np.zeros((4,3))
-                coords_temp[side][0 ,:] = coords[side][0, :]
-                coords_temp[side][1, :] = np.mean(coords[side][1: 4, :], axis=0)
-                coords_temp[side][2, :] = np.mean(coords[side][4: 7, :], axis=0)
-                coords_temp[side][3, :] = coords[side][7, :]
-
-                A[side] = scipy.spatial.distance.cdist(coords_temp[side], coords_temp[side], 'euclidean')
-                emp_eldist[side] = np.sum(np.sum(np.tril(np.triu(A[side], 1), 1))) / 3
-        else:
-            A = np.sqrt(scipy.spatial.distance.cdist(coords, coords, 'euclidean'))
-            can_eldist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / 3  # TODO what is (options.elspec.numel -1)?? change code after finding out!!
-
+            _, lead_models[side]['trajectory'], _, marker_temp = \
+                self.resolve_coordinates(marker_orig[side], default_lead_coords_mm, default_lead_pos, lead_type,
+                                     resize_bool=resize, rszfactor=mean_empdist)
+            lead_models[side] = self.marker_update(marker_temp, lead_models[side])
 
         marker_new = []
+
+        # Plot lead trajectory TODO: move to separate function
+        try:
+            if trajectory[1].size != 0:
+                traj_plot = plt.scatter(trajectory[0][:,0], trajectory[0][:,1],trajectory[0][:,2],
+                                        edgecolors=[.3, .5, .9], linewidths=1.5)
+        except KeyError:
+            print("No trajectory information available.")
+
+        # Plot information on the right TODO: move to separate function
+        mainax2 = fig.add_subplot(grid[-1, -1])
+        text2plot = ['Lead:\t\t{} of \t{}\n'
+                     'Lead spacing:\t{:.2f} mm\n'
+                     'Rotation:\t {} deg'.format('1', str(len(lead_models)), mean_empdist, lead_models[1]['rotation'])]
+
+        # 'Color', 'w', 'BackgroundColor', 'k', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
+        # set(mcfig, 'name',[options.patientname, ', Electrode ', num2str(options.elside), '/', num2str(length(options.sides)),
+        #     ', Electrode Spacing: ', sprintf('%.2f', memp_eldist), ' mm.']);
+
+
+        marker_new, elplot = [],[]
         if not elplot:
             cnt = 1
             mplot1 = plt.scatter(marker_new[0]["markers_head"][0], marker_new[0]["markers_head"][1],
@@ -184,6 +205,14 @@ class PlotRoutines:
         for key_name, val in marker_updated.items():
             lead_models[key_name] = val
         return lead_models
+
+    @staticmethod
+    def lead_dist(coords, factor=3):
+        """calculates the lead distances according to its coordinates"""
+
+        A = scipy.spatial.distance.cdist(coords, coords, 'euclidean')
+        lead_dist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / factor
+        return lead_dist
 
     def initialise_rotation(self, lead_models, marker):
         """script which iniitalises the estimation of a rotation; this is necessary as at the beginning there is no
