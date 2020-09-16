@@ -60,8 +60,12 @@ class LeadWorks:
             file_id_T1 = [file_tuple for file_tuple in available_files
                                  if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
                                  and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
-            T1imaging = ants.image_read(file_id_T1[0][0])
-            Imaging.create_brainmask(input_folder=inputfolder, registered_images=T1imaging)
+            if not file_id_T1:
+                Output.msg_box(text='There is no T1 imaging available. BrainMask extraction impossible.', title='No T1-sequencesavailable")')
+                return
+            else:
+                T1imaging = ants.image_read(file_id_T1[0][0])
+                Imaging.create_brainmask(input_folder=inputfolder, registered_images=T1imaging)
 
         fileID = list(FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all information to one list
 

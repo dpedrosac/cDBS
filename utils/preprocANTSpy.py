@@ -149,6 +149,11 @@ class ProcessANTSpy:
         for idx, seqs in enumerate(sequences):
             file_template = [x for x in templatefiles if re.search(r'\w+.({}).'.format(seqs), x, re.IGNORECASE)] # template
 
+            if not file_template:
+                HF.msg_box(text='No teamplet could be found. Please make sure they are installled at ./ext/templates',
+                            title='Template missing') # TODO install templates by default!
+                return
+
             regex_complete = '{}{}'.format(self.cfg["preprocess"]["ANTsN4"]["prefix"], seqs)
 
             files_subj = [x for x in allfiles if
