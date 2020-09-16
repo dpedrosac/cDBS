@@ -8,9 +8,11 @@ import pickle
 import matplotlib
 import matplotlib.gridspec as gridspec
 import numpy as np
+import textwrap as tw
 import scipy
 from mat4py import loadmat
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from dependencies import ROOTDIR
 from utils.HelperFunctions import Output, Configuration
@@ -86,8 +88,7 @@ class PlotRoutines:
             trajectory.append(traj_temp)
         #TODO: elecModels should be updated somehow
 
-        mainax1 = fig.add_subplot(grid[:-1, 1:3])
-        mainax2 = fig.add_subplot(grid[-1, 4:6]) # TODO: Somethings wrong herewith the grid
+        #mainax2 = fig.add_subplot(grid[-1, 4:6]) # TODO: Somethings wrong herewith the grid
 
         emp_dist = [None]*len(lead_models)
         if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
@@ -113,18 +114,47 @@ class PlotRoutines:
         marker_new = []
 
         # Plot lead trajectory TODO: move to separate function
+        mainax1 = fig.add_subplot(grid[:-1, 1:3])
+        mainax1.axes.get_xaxis().set_visible(False)
+        mainax1.axes.get_yaxis().set_visible(False)
+        
+        marker_plot = []
+        marker_plot.append(dict([(k, r) for k, r in lead_models[0].items() if k.startswith('marker')]))
+
+        head_marker = plt.scatter(marker_plot[0]["markers_head"][0],
+                                marker_plot[0]["markers_head"][1],
+                                marker_plot[0]["markers_head"][2],
+                                marker='x', edgecolors='r', linewidths=1.5)
+
+        tail_marker = plt.scatter(marker_plot[0]["markers_tail"][0],
+                                marker_plot[0]["markers_tail"][1],
+                                marker_plot[0]["markers_tail"][2],
+                                marker='x', edgecolors='g', linewidths=1.5)
+
+        for idx, c in enumerate(coords[0]):
+            # plt.scatter(coords[0][idx][0], coords[0][idx][1], coords[0][idx][2], marker='o', edgecolor=[.9, .9, .9])
+            plt.scatter(coords[0][idx][0], coords[0][idx][1], s=250, c='w', marker='p', edgecolor=[.9, .9, .9], )
+
         try:
-            if trajectory[1].size != 0:
-                traj_plot = plt.scatter(trajectory[0][:,0], trajectory[0][:,1],trajectory[0][:,2],
-                                        edgecolors=[.3, .5, .9], linewidths=1.5)
+            if trajectory[0].size != 0:
+                traj_interp = np.linspace(start=trajectory[0][0,:], stop=trajectory[0][-1,:], num=500)
+                traj_plot = plt.scatter(traj_interp[:,0], traj_interp[:,1], s = .2) #,trajectory[0][:,2],
+                                        # s=200, edgecolors=[.3, .5, .9])
+                # traj_plot_line = plt.plot(trajectory[0][0,:], trajectory[0][-1,:])
         except KeyError:
             print("No trajectory information available.")
 
         # Plot information on the right TODO: move to separate function
-        mainax2 = fig.add_subplot(grid[-1, -1])
-        text2plot = ['Lead:\t\t{} of \t{}\n'
-                     'Lead spacing:\t{:.2f} mm\n'
-                     'Rotation:\t {} deg'.format('1', str(len(lead_models)), mean_empdist, lead_models[1]['rotation'])]
+        text2plot = 'Lead: {} of {} \nLead spacing: {:.2f} mm\nRotation:  {} ' \
+                    'deg'.format('1', str(len(lead_models)), mean_empdist, lead_models[1]['rotation'])
+
+        fig_txt = tw.fill(tw.dedent(text2plot.rstrip()), width=80)
+
+        # The YAxis value is -0.07 to push the text down slightly
+        plt.figtext(.9, .25, text2plot, horizontalalignment='center',
+                    fontsize=12, ha='center', va='center',
+                    bbox=dict(boxstyle='circle', facecolor='#D8D8D8',
+                              ec="0.5", pad=0.5, alpha=1), fontweight='bold')
 
         # 'Color', 'w', 'BackgroundColor', 'k', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle');
         # set(mcfig, 'name',[options.patientname, ', Electrode ', num2str(options.elside), '/', num2str(length(options.sides)),
@@ -234,7 +264,7 @@ class PlotRoutines:
 
     def estimate_rotation(self, lead_models, marker):
         """script which determines the rotation according to the markers provided; this script includes all parts of
-        the determinatio of rotation included in ea_mancor_updatescene of the Lead-DBS package """
+        the determination of rotation included in ea_mancor_updatescene of the Lead-DBS package """
 
         rotation = lead_models['rotation']
         normtrajvector = lead_models["normtraj_vector"]
@@ -265,7 +295,6 @@ class PlotRoutines:
                 D[i,j] = np.dot(diff, diff)
                 D[j,i] = D[i,j]
         return D
-
 
     @staticmethod
     def getbgsidecolor(side, xray=False):
@@ -308,7 +337,7 @@ class PlotRoutines:
     def save_elecModel(lead_models, intensityProfiles, skelSkalms, filename=''):
 
         if not filename:
-            Output.msg_box(text="No filename for saving lead model provided", title="No filename provided")
+            Output.msg_box(text='No filename for saving lead model provided', title='No filename provided')
             return
 
         with open(filename, "wb") as f:
