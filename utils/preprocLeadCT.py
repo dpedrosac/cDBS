@@ -127,7 +127,7 @@ class LeadWorks:
         [areas.append(a) for a in ccProps if minVoxelNumber <= a.area <= maxVoxelNumber]
         print('Guessing {} of them being DBS-leads'.format(str(len(areas))))
 
-        leadPointCloudStruct = self.identifyLeads(fileID, CTimaging, threshold, areas)  #
+        leadPointCloudStruct, transformation_matrix = self.identifyLeads(fileID, CTimaging, threshold, areas)  #
         elecModels, intensityProfiles, skelSkalms = [[] for _ in range(3)]
         for idx, leadPoints in enumerate(leadPointCloudStruct):
             print("\nAnalysing lead no {} with {} pixels".format("\u0332".join(str(idx + 1)),
@@ -137,6 +137,9 @@ class LeadWorks:
             mod, prof, skel = \
                 self.refitElec(initialPoly, leadPoints['points'], leadPoints['pixelValues'],
                                CTspace=CTimaging.spacing[2])
+
+            mod['filenameCTimaging'] = os.path.split(fileID[0])
+            mod['transformation_matrix'] = transformation_matrix
             elecModels.append(mod)
             intensityProfiles.append(prof)
             skelSkalms.append(skel)
@@ -202,7 +205,7 @@ class LeadWorks:
             filename_elecMask = os.path.join(os.path.split(fileID[0])[0], 'elecMask_no' + str(i) + '.nii')
             ants.image_write(image=CTimaging.new_image_like(elecMask_temp), filename=filename_elecMask)  # mask to NIFTI
 
-        return leadpoint_cloudstruct
+        return leadpoint_cloudstruct, transformation_matrix
 
     # ==============================    PREPROCESSING (2. step)  ==============================
     def electrodePointCloudModelEstimate(self, leadPoints, spacing, USE_REF_WEIGHTING=True, tol=0):
@@ -623,7 +626,7 @@ class LeadWorks:
                  'r3polynomial', 'activeContact', 'detectedContactPosition', 'useDetectedContactPosition', \
                  'skeleton', 'contactPositions', 'getContactPositions3D', 'trajectory', 'markers_head', \
                  'markers_tail', 'normtraj_vector', 'orth', 'markers_x', 'markers_y', 'rotation', \
-                 'manual_correction', 'first_run'
+                 'manual_correction', 'first_run', 'transformation_matrix', 'filenameCTimaging'
         refitReZeroedElecMod = {k: [] for k in items1}
 
         refitReZeroedElecMod['lead_information'] = lead_information
