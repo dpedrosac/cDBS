@@ -27,20 +27,21 @@ class BiasCorrection:
 
         print('\nDebiasing imaging of {} subject(s)'.format(len(subjects)))
         allfiles = FileOperations.get_filelist_as_tuple(inputdir=self.cfg['folders']['nifti'], subjects=subjects)
-        strings2exclude = ['CT', self.cfg['preprocess']['ANTsN4']['prefix'], 'reg_run', 'mask']
+        strings2exclude = ['CT', self.cfg['preprocess']['ANTsN4']['prefix'], 'reg_run', 'Mask']
 
         allfiles = [x for x in allfiles if x[0].endswith('.nii') and not
-        any(re.search(r'\w+(?!_).({}).'.format(z), x[0], re.IGNORECASE) for z in strings2exclude)]
+        any(re.search(r'\w+(?!_).({})|^({})\w+.'.format(z, z), os.path.basename(x[0]), re.IGNORECASE)
+            for z in strings2exclude)]
 
-        file_id_DTI = [x for x in allfiles if (x[0].endswith('.nii') and
-                                               self.cfg['preprocess']['ANTsN4']['dti_prefix'] in x[0]) and not
-                       any(re.search(r'\w+(?!_).({}).'.format(z), x[0], re.IGNORECASE) for z in
-                           strings2exclude)]
+        file_id_DTI = [x for x in allfiles if (x[0].endswith('.nii') and self.cfg['preprocess']['ANTsN4']['dti_prefix']
+                                               in x[0]) and not
+                       any(re.search(r'\w+(?!_).({})|^({})\w+.'.format(z, z), os.path.basename(x[0]), re.IGNORECASE)
+                           for z in strings2exclude)]
 
         file_id_noDTI = [x for x in allfiles if (x[0].endswith('.nii') and not
         self.cfg['preprocess']['ANTsN4']['dti_prefix'] in x[0]) and not
-                         any(re.search(r'\w+(?!_).({}).'.format(z), x[0], re.IGNORECASE) for z in
-                             strings2exclude)]
+                         any(re.search(r'\w+(?!_).({})|^({})\w+.'.format(z, z), os.path.basename(x[0]), re.IGNORECASE)
+                             for z in strings2exclude)]
 
         seq = 'struct'  # For debugging purposes
         if not seq:
@@ -76,8 +77,8 @@ class BiasCorrection:
                         '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(allfiles_subj)))),
                         (time.time() - start_multi) / len(subjects))
             Output.logging_routine(text=Output.split_lines(log_text), cfg=self.cfg,
-                                      subject=str(subjID), module='N4BiasCorrection',
-                                      opt=self.cfg['preprocess']['ANTsN4'], project="")
+                                   subject=str(subjID), module='N4BiasCorrection',
+                                   opt=self.cfg['preprocess']['ANTsN4'], project="")
 
         print('\nIn total, a list of {} subject(s) was processed \nOverall, bias correction took '
               '{:.1f} secs.'.format(len(subjects), time.time() - start_multi))
@@ -105,7 +106,7 @@ class BiasCorrection:
         bcorr_image = n4biascorr(original_image_nonneg, mask=None,
                                  shrink_factor=self.cfg['preprocess']['ANTsN4']['shrink-factor'],
                                  convergence={'iters': self.cfg['preprocess']['ANTsN4']['convergence'],
-                                  'tol': self.cfg['preprocess']['ANTsN4']['threshold']},
+                                              'tol': self.cfg['preprocess']['ANTsN4']['threshold']},
                                  spline_param=self.cfg['preprocess']['ANTsN4']['bspline-fitting'],
                                  verbose=bool(self.verbose), weight_mask=None)
 
@@ -121,7 +122,7 @@ class BiasCorrection:
 
         spacing = self.cfg['preprocess']['registration']['resample_spacing']
         bcorr_image = Imaging.resampleANTs(mm_spacing=spacing, ANTsImageObject=bcorr_image,
-                                              file_id=filename_save, method=int(self.cfg['preprocess']
-                                                                                      ['registration']
-                                                                                      ['resample_method']))
+                                           file_id=filename_save, method=int(self.cfg['preprocess']
+                                                                             ['registration']
+                                                                             ['resample_method']))
         ants.image_write(bcorr_image, filename=filename_save)

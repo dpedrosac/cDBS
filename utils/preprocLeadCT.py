@@ -225,14 +225,15 @@ class LeadWorks:
         skeleton, sumInPlane = [[] * i for i in range(2)]
         for zplaneID in zPlanes:
             idx_zplane = np.where(abs(leadPoints['points'][:, -1] - zplaneID) <= tol)
-            inPlanePoints = leadPoints['points'][idx_zplane, :]
-            if USE_REF_WEIGHTING:
-                inPlaneIntensities = leadPoints['pixelValues'][idx_zplane].astype('float32')  #
-                # estimates slice wise centroid weighted by image intensity values (Husch et al. 2015, Section 2.1)
-                skeleton.append(np.squeeze(inPlanePoints).T @ (inPlaneIntensities / np.sum(inPlaneIntensities)))
-                sumInPlane.append(np.sum(inPlaneIntensities))
-            else:
-                skeleton.append = np.mean(inPlanePoints)
+            if idx_zplane[0].shape[0] > 1:  #ignore 'pseude-slices' with only one plane
+                inPlanePoints = leadPoints['points'][idx_zplane, :]
+                if USE_REF_WEIGHTING:
+                    inPlaneIntensities = leadPoints['pixelValues'][idx_zplane].astype('float32')  #
+                    # estimates slice wise centroid weighted by image intensity values (Husch et al. 2015, Section 2.1)
+                    skeleton.append(np.squeeze(inPlanePoints).T @ (inPlaneIntensities / np.sum(inPlaneIntensities)))
+                    sumInPlane.append(np.sum(inPlaneIntensities))
+                else:
+                    skeleton.append = np.mean(inPlanePoints)
 
         skeleton, sumInPlane = np.array(skeleton), np.array(sumInPlane)
         skeleton_filter = sumInPlane < np.median(sumInPlane) / 1.5
