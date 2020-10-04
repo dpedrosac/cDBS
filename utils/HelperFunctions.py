@@ -236,7 +236,7 @@ def get_filelist_as_tuple(inputdir, subjects):
     allfiles = []
     [allfiles.extend(
         zip(glob.glob(os.path.join(inputdir, x + "/*")), [x] * len(glob.glob(os.path.join(inputdir, x + "/*")))))
-     for x in subjects]
+        for x in subjects]
 
     return allfiles
 
@@ -517,27 +517,27 @@ class Imaging:
                            title="Unknown viewer")
 
     @staticmethod
-    def resampleANTsImaging(mm_spacing, ANTsImageObject, file_id, method):
+    def resampleANTs(mm_spacing, ANTsImageObject, file_id, method):
         """Function aiming at rescaling imaging to a resolution specified somewhere, e.g. in the cfg-file"""
         import math, ants
 
         resolution = [mm_spacing] * 3
         if not all([math.isclose(float(mm_spacing), x, abs_tol=10 ** -2) for x in ANTsImageObject.spacing]):
-            print('Image spacing {:.4f}x{:.4f}x{:.4f} unequal to specified value ({}mm). '
-                  '\n\tRescaling {}'.format(ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
-                                            ANTsImageObject.spacing[2], mm_spacing, file_id))
+            print('\tImage spacing {:.4f}x{:.4f}x{:.4f} unequal to specified value ({}mm). '
+                  '\n\t\tRescaling {}'.format(ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
+                                              ANTsImageObject.spacing[2], mm_spacing, file_id))
 
             if len(ANTsImageObject.spacing) == 4:
                 resolution.append(ANTsImageObject.spacing[-1])
             elif len(ANTsImageObject.spacing) > 4:
-                msg_box(text='Sequences of >4 dimensions are not possible.', title='Too many dimensions')
+                msg_box(text='\tSequences of >4 dimensions are not possible.', title='Too many dimensions')
 
             resampled_image = ants.resample_image(ANTsImageObject, resolution, use_voxels=False, interp_type=method)
             ants.image_write(resampled_image, filename=file_id)
         else:
-            print('Image spacing for sequence: {} is {:.4f}x{:.4f}x{:.4f} as specified in options, '
-                  'proceeding'.format(file_id, ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
-                                      ANTsImageObject.spacing[2]))
+            print('\tImage spacing for sequence: {} is {:.4f}x{:.4f}x{:.4f} as specified in options, '
+                  '\t -> proceeding!'.format(file_id, ANTsImageObject.spacing[0], ANTsImageObject.spacing[1],
+                                             ANTsImageObject.spacing[2]))
             resampled_image = ANTsImageObject
 
         return resampled_image

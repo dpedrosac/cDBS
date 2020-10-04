@@ -38,7 +38,6 @@ preprocess:
     ReorientCrop: 'no'
     Verbosity: 1
   normalisation:
-    prefix: norm_
     sequences: T1_,T2_,PD_
     template_image: mni_icbm152_nlin_asym_09b
   registration:

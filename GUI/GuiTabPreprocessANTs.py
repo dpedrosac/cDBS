@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
 
 import utils.HelperFunctions as HF
 import utils.preprocANTSpy as ANTspyRoutines
+import utils.N4BiasCorrection_ANTs as N4BiasCorr
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
 from GUI.GuiTwoLists_generic import TwoListGUI
 import private.allToolTips as setToolTips
@@ -181,7 +182,8 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspyRoutines.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
+                N4BiasCorr.BiasCorrection().N4BiasCorrection(subjects=self.selected_subj_ANT)
+                # ANTspyRoutines.ProcessANTSpy().N4BiasCorrection(subjects=self.selected_subj_ANT)
 
     def run_ANTsPreferences(self):
         """change the settings for the ANTs routines, that is N4BiasCorrection and registration of CT/MRI """
@@ -219,8 +221,8 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspyRoutines.ProcessANTSpy().ANTsCoregisterCT2MRI(subjects=self.selected_subj_ANT,
-                                                                    input_folder=self.cfg["folders"]["nifti"])
+                ANTspyRoutines.RegistrationANTs().CoregisterCT2MRI(subjects=self.selected_subj_ANT,
+                                                                   input_folder=self.cfg["folders"]["nifti"])
 
     def run_RegisterMRI2template(self):
         """Wrapper to run the coregistration routines for the MRI (moving image) to MRI templates (fixed image)
@@ -236,7 +238,7 @@ class GuiTabPreprocessANTs(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                ANTspyRoutines.ProcessANTSpy().ANTsCoregisterMRI2template(subjects=self.selected_subj_ANT)
+                ANTspyRoutines.RegistrationANTs().CoregisterMRI2template(subjects=self.selected_subj_ANT)
 
 
 if __name__ == '__main__':

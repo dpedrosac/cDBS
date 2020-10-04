@@ -8,13 +8,14 @@ import pickle
 import matplotlib
 import matplotlib.gridspec as gridspec
 import numpy as np
-
 import scipy
 from mat4py import loadmat
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from dependencies import ROOTDIR
-from utils.HelperFunctions import Output, Configuration, MatlabEquivalent
+from utils.HelperFunctions import Output, Configuration
+
 
 class PlotRoutines:
     """plots the results from the electrode reconstruction/model creation in order to validate the results"""
@@ -60,6 +61,7 @@ class PlotRoutines:
 
         # Start plotting
         fig = plt.figure(facecolor=self.getbgsidecolor(side=0)) # TODO: is it really the side, what is this color actually
+        fig.tight_layout()
         width = [1, 2, 2, 1]
         height = [1, 1, 1]
         grid = gridspec.GridSpec(ncols=4, nrows=3, figure=fig, width_ratios=width, height_ratios=height)
@@ -69,6 +71,9 @@ class PlotRoutines:
 
         grid_indices = [(-1), (-1)]
         self.plot_leadInformation(lead_model, mean_empdist, fig, grid, grid_indices)
+
+        self.plotCTaxial(lead_model, fig, grid, cmap='gist_gray')
+        self.plot_leadModel(lead_properties, fig, grid)
 
     def plotCTintensities(self, lead_model, coordinates, trajectory, fig, grid, grid_indices, dimension=['sag', 'cor']):
         """function plotting perpendicular images of the intensities obtained from trajectory coordinates; separate
@@ -82,6 +87,7 @@ class PlotRoutines:
         # Prepare plot
         mainax1 = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
                                   grid_indices[1][0]:grid_indices[1][1]], facecolor='None', projection='3d')
+        fig.tight_layout()
         mainax1.set_axis_off()
         mainax1.set_facecolor('None')
 
@@ -127,6 +133,7 @@ class PlotRoutines:
         """plots lead information in the lower right corner"""
 
         axis = fig.add_subplot(grid[grid_indices[0], grid_indices[1]], facecolor='None')
+        fig.tight_layout()
         axis.set_axis_off()
         axis.set_facecolor('None')
 
@@ -136,26 +143,85 @@ class PlotRoutines:
         axis.text(.6, .25, text2plot, horizontalalignment='center',fontsize=12, ha='center', va='center',
                     bbox=dict(boxstyle='circle', facecolor='#D8D8D8', ec="0.5", pad=0.5, alpha=1), fontweight='bold')
 
-    def plotCTaxial(self, lead_model, fig, grid, dimension=['tra']):
+    def plotCTaxial(self, lead_model, fig, grid, cmap='gist_gray'):
         """function plotting axial sclices at the level of head and tail markers"""
 
         print("\t...extracting axial slices for corresponding markers of CTimaging\t...")
-        marker_plot = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker')])
-        marker_of_interest = ['marker_head', 'marker_tail']
-        colors = ['g', 'r']
-        for idx, marker in enumerate(marker_of_interest):
-            intensity_matrix, _, _ = self.get_axialplanes(marker_plot[marker], lead_model=lead_model,
-                                                                  direction=['tra'], window_size=15, resolution=.5)
-            transversal_axis = fig.add_subplot(grid[idx, -1], facecolor='None')
-            transversal_axis.imshow(intensity_matrix) # TODO: axes must be added here
+        marker_of_interest = ['markers_head', 'markers_tail']
+        marker_plot = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker') and
+                            any(z in k for z in marker_of_interest)])
+        color_specs = ['g', 'r']
+        item = -1
+        for marker, coordinates in marker_plot.items():
+            item += 1
+            intensity_matrix, bounding_box, _ = self.get_axialplanes(coordinates, lead_model=lead_model,
+                                                          window_size=15, resolution=.5)
+            transversal_axis = fig.add_subplot(grid[item, -1], facecolor='None')
+            transversal_axis.imshow(intensity_matrix, cmap=cmap, extent=[np.min(bounding_box, axis=1)[0],
+                                                                         np.max(bounding_box, axis=1)[0],
+                                                                         np.min(bounding_box, axis=1)[1],
+                                                                         np.max(bounding_box, axis=1)[1]],
+                                    interpolation='bicubic')
             transversal_axis.set_axis_off()
             transversal_axis.set_facecolor('None')
 
-            # transversal_axis.scatter(coordinates[0], coordinates[1], s=25, c=colors[idx], edgecolor=colors[idx],
-            #              marker='*', linewidth=1.5)
+            transversal_axis.scatter(coordinates[0], coordinates[1], s=200, c=color_specs[item],
+                                     edgecolor=color_specs[item], marker='x', linewidth=1.5)
 
         grid.tight_layout(fig)
 
+    @staticmethod
+    def plot_leadModel(lead_properties, fig, grid, grid_indices=[(0, -1), (0)],
+                       colors=[.3, .5], items_of_interest=['insulation', 'contacts']):
+        """plots a schematic lead model at the left side in order to visualise what it should look like """
+
+        lead_model_plot = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
+                                  grid_indices[1]], facecolor='None', projection='3d')
+
+        # Prepare data
+        lead_plot = dict([(k, r) for k, r in lead_properties.items() if any(z in k for z in items_of_interest)])
+        max_coords, min_coords = [[] for _ in range(2)]
+
+        # Start visualisation
+        for idx, item in enumerate(items_of_interest):
+            for idx_vertices in (range(0, len(lead_plot[item]['vertices']))):
+                mesh = []
+                verts_temp = np.array(lead_plot[item]['vertices'][idx_vertices]) - 1
+                faces_temp = np.array(lead_plot[item]['faces'][idx_vertices]) - 1
+                mesh = Poly3DCollection(verts_temp[faces_temp], facecolors=[colors[idx]] * 3, edgecolor="none",
+                                        rasterized=True)
+                lead_model_plot.add_collection(mesh)
+
+                if item == 'contacts':
+                    max_coords.append(np.max(verts_temp[faces_temp], axis=1))
+                    min_coords.append(np.min(verts_temp[faces_temp], axis=1))
+
+        lead_type = 'boston'
+        marker_position = ['head', 'tail']
+        marker = {k: [] for k in marker_position}
+        if lead_type == 'boston':
+            for n in range(3):
+                marker['tail'].append(lead_properties['tail_position'][n])
+                marker['head'].append(lead_properties['tail_position'][n])
+            marker['tail'][2] = np.min(min_coords[0])
+
+        else:
+            for n in range(3):
+                marker['tail'].append(lead_properties['tail_position'][n])
+                marker['head'].append(lead_properties['head_position'][n])
+
+        color = ['r', 'g']
+        for idx, loc in enumerate(marker_position):
+            lead_model_plot.scatter(marker[loc][0] - 1, marker[loc][1] - 2, marker[loc][2],
+                       c=color[idx], s=25)
+
+        lead_model_plot.set_zlim([0, 15])
+        lead_model_plot.set_ylim(-4, 4)
+        lead_model_plot.set_xlim(-4, 4)
+        lead_model_plot.set_facecolor('None')
+        lead_model_plot.view_init(elev=0, azim=-120)
+        lead_model_plot.set_axis_off()
+        grid.tight_layout(fig)
 
     def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_type, resize_bool=False, rszfactor=0):
         """emulates the function from Lead-DBS ea_resolvecoords; unlike in Lead DBS this is done one at a time cf.
@@ -289,12 +355,8 @@ class PlotRoutines:
 
         return imat, bounding_box, fitvolume
 
-    def get_axialplanes(self, marker, lead_model, limits=[(-4,4),(-4,4),(-10,20)], sample_width=10,
-                     direction=['sag', 'cor'], window_size=15, resolution=.5):
-
-        imat = {k: [] for k in direction}
-        fitvolume = {k: [] for k in direction}
-        bounding_box = {k: [] for k in direction}
+    def get_axialplanes(self, marker_coordinates, lead_model, window_size=15, resolution=.5):
+        """returns a plane at a specific window with a certain direction"""
 
         if lead_model['transformation_matrix'].shape[0] == 3:
             lead_model['transformation_matrix'] = np.eye(4)*lead_model['transformation_matrix'][0,0]
@@ -302,22 +364,21 @@ class PlotRoutines:
         transformation_matrix = lead_model['transformation_matrix']
         transformation_matrix = np.eye(4)
 
-        for idx, plane in enumerate(direction):
-            bounding_box_coords = []
-            for k in range(2):
-                bounding_box_coords.append(np.arange(start=marker[k]-window_size, stop=marker[k]+window_size,
-                                                     step=resolution))
-            bounding_box_coords.append(np.repeat(marker["markers_head"][k], len(bounding_box_coords[1])))
-            bounding_box = np.array(bounding_box_coords)
-            meshX, meshY = np.meshgrid(bounding_box[0,:], bounding_box[1,:])
-            meshZ = np.repeat(bounding_box[0,0], bounding_box[0].size)
-            fitvolume_orig = np.array(meshX, meshY, meshZ)
-            fitvolume = np.linalg.solve(transformation_matrix, np.reshape(fitvolume_orig, (3, -1), order='F'))
-            resampled_points = PlotRoutines.interpolate_CTintensities(lead_model, fitvolume)
-            imat[plane] = np.reshape(resampled_points, (fitvolume.shape[1], -1), order='F') # TODO:not sure the reshape dimensions should be
+        bounding_box_coords = []
+        for k in range(2):
+            bounding_box_coords.append(np.arange(start=marker_coordinates[k]-window_size,
+                                                     stop=marker_coordinates[k]+window_size, step=resolution))
+        bounding_box_coords.append(np.repeat(marker_coordinates[-1], len(bounding_box_coords[1])))
+        bounding_box = np.array(bounding_box_coords)
+
+        meshX, meshY = np.meshgrid(bounding_box[0,:], bounding_box[1,:])
+        meshZ = np.repeat(bounding_box[-1,0], len(meshX.flatten()))
+        fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
+        fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
+        resampled_points = PlotRoutines.interpolate_CTintensities(lead_model, fitvolume)
+        imat = np.reshape(resampled_points, (meshX.shape[0], -1), order='F')
 
         return imat, bounding_box, fitvolume
-
 
     @staticmethod
     def resample_CTplanes(hd_trajectories, direction, lead_model, resolution=.2, sample_width=10):

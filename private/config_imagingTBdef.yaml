@@ -41,7 +41,6 @@ preprocess:
     resample_spacing: '0.7'
     custom_registration_file: 'cmdline_ANTsRegistration.txt'
   normalisation:
-    prefix: norm_
     template_image: mni_icbm152_nlin_asym_09b
     sequences: 'T1_,T2_,PD_'
 lead_detection:
