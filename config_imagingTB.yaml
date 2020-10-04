@@ -1,11 +1,11 @@
 ---
 folders:
-  dicom: /Users/Bugrahan/PycharmProjects/cDBS/data/DICOM/deiss_frankCT
-  nifti: /media/storage/cDBS/data/NIFTI
+  dicom: /Users/Bugrahan/PycharmProjects/cDBS/data/DICOM
+  nifti: /Users/Bugrahan/PycharmProjects/cDBS/data/nifti
   path2itksnap: ''
   path2slicer: ''
   prefix: subj
-  rootdir: /media/storage/cDBS
+  rootdir: /Users/Bugrahan/PycharmProjects/cDBS
 lead_detection:
   PaCER:
     detection_method: contactAreaCenter
@@ -38,6 +38,7 @@ preprocess:
     ReorientCrop: 'no'
     Verbosity: 1
   normalisation:
+    prefix: ''
     sequences: T1_,T2_,PD_
     template_image: mni_icbm152_nlin_asym_09b
   registration:

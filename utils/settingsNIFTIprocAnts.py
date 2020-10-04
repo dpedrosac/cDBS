@@ -366,7 +366,7 @@ class GuiSettingsNiftiAnts(QWidget):
             # Right side, i.e. Registration
             self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
             self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
-            self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
+            #self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
             self.lineEditNormalisationSequences.setText(str(self.cfg["preprocess"]["normalisation"]["sequences"]))
 
     def closeEvent(self, event):
