@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-import yaml
-import os
 import glob
-import utils.HelperFunctions as HF
-import private.allToolTips as setToolTips
+import os
+import sys
+
+import yaml
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, \
     QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox, QComboBox
+
+import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
+from utils.HelperFunctions import Configuration
 
 
 class GuiSettingsNiftiAnts(QWidget):
@@ -21,7 +23,7 @@ class GuiSettingsNiftiAnts(QWidget):
         super(GuiSettingsNiftiAnts, self).__init__(parent=None)
 
         # Load configuration files and general settings
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = Configuration.load_config(ROOTDIR)
 
         # General appearance of the GUI
         self.setFixedSize(800, 600)
@@ -85,7 +87,6 @@ class GuiSettingsNiftiAnts(QWidget):
         lay4.addWidget(self.lineEditBSplineDist)
         lay4.addStretch()
 
-        # TODO: Change labelConvergence
         width = 31.33
         self.labelConv = QLabel('Convergence?\t\t')
         self.labelConv.setToolTip(setToolTips.N4BiasConvergence())
@@ -146,15 +147,6 @@ class GuiSettingsNiftiAnts(QWidget):
         lay8.addWidget(self.labelPrefixRegistration)
         lay8.addWidget(self.lineEditPrefixRegistration)
         lay8.addStretch()
-
-        self.labelPrefixNormalisation = QLabel('Normalisation prefix?\t')
-        # self.labelPrefixRegistration.setToolTip(setToolTips.LabelPrefixBias())
-        self.lineEditPrefixNormalisation = QLineEdit()
-
-        lay9 = QHBoxLayout()
-        lay9.addWidget(self.labelPrefixNormalisation)
-        lay9.addWidget(self.lineEditPrefixNormalisation)
-        lay9.addStretch()
 
         self.labelResampleSpacing = QLabel('Resample Spacing?\t')
         self.labelResampleSpacing.setToolTip(setToolTips.LabelResampleImages())
@@ -286,7 +278,6 @@ class GuiSettingsNiftiAnts(QWidget):
         lay16.addStretch()
 
         self.settings_list2.addLayout(lay8)
-        self.settings_list2.addLayout(lay9)
         self.settings_list2.addStretch(1)
         self.settings_list2.addLayout(lay10)
         self.settings_list2.addLayout(lay11)
@@ -366,7 +357,10 @@ class GuiSettingsNiftiAnts(QWidget):
             # Right side, i.e. Registration
             self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
             self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
+<<<<<<< HEAD
             #self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
+=======
+>>>>>>> Debugging regular expressions for N4BiasCorrecion, which could be ambiguous with different machines. Moreover, tidying up the code at GuiTabPreprocessANTs.py
             self.lineEditNormalisationSequences.setText(str(self.cfg["preprocess"]["normalisation"]["sequences"]))
 
     def closeEvent(self, event):
@@ -385,10 +379,9 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg["preprocess"]["registration"]["prefix"] = self.lineEditPrefixRegistration.text()
         self.cfg["preprocess"]["registration"]["resample_spacing"] = self.lineResampleSpacing.text()
 
-        self.cfg["preprocess"]["normalisation"]["prefix"] = self.lineEditPrefixNormalisation.text()
         self.cfg["preprocess"]["normalisation"]["sequences"] = self.lineEditNormalisationSequences.text()
 
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        Configuration.save_config(ROOTDIR, self.cfg)
         event.accept()
 
     def load_default_settings(self):
@@ -463,12 +456,12 @@ class GuiSettingsNiftiAnts(QWidget):
     @QtCore.pyqtSlot()
     def comboChangedRegDefault(self):
         self.cfg["preprocess"]["registration"]["registration_method"] = self.lineRegistrationMethod.currentText()
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        Configuration.save_config(ROOTDIR, self.cfg)
 
     @QtCore.pyqtSlot()
     def comboChangedNormalisation(self):
         self.cfg["preprocess"]["normalisation"]["template_image"] = self.lineTemplatesAvailable.currentText()
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        Configuration.save_config(ROOTDIR, self.cfg)
 
 
 if __name__ == "__main__":

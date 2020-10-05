@@ -11,8 +11,8 @@ import utils.N4BiasCorrection_ANTs as N4BiasCorr
 import utils.preprocANTSpy as ANTspyRoutines
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
-from utils.HelperFunctions import Output, Configuration, FileOperations
 from utils.settingsNIFTIprocAnts import GuiSettingsNiftiAnts
+from utils.HelperFunctions import Output, Configuration, Imaging, FileOperations, MatlabEquivalent
 
 
 class GuiTabPreprocessANTs(QWidget):
