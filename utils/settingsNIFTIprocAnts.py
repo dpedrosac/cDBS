@@ -357,10 +357,7 @@ class GuiSettingsNiftiAnts(QWidget):
             # Right side, i.e. Registration
             self.lineEditPrefixRegistration.setText(self.cfg["preprocess"]["registration"]["prefix"])
             self.lineResampleSpacing.setText(str(self.cfg["preprocess"]["registration"]["resample_spacing"]))
-<<<<<<< HEAD
-            #self.lineEditPrefixNormalisation.setText(str(self.cfg["preprocess"]["normalisation"]["prefix"]))
-=======
->>>>>>> Debugging regular expressions for N4BiasCorrecion, which could be ambiguous with different machines. Moreover, tidying up the code at GuiTabPreprocessANTs.py
+
             self.lineEditNormalisationSequences.setText(str(self.cfg["preprocess"]["normalisation"]["sequences"]))
 
     def closeEvent(self, event):
