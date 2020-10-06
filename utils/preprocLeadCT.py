@@ -31,7 +31,7 @@ class LeadWorks:
         self.verbose = 0
         self.debug = False
         self.PacerEmulation = True
-
+ 
     def PaCER_script(self, subjects, inputfolder=''):
         """wrapper script for all steps included in the PaCER algorithm"""
 
@@ -270,10 +270,10 @@ class LeadWorks:
         STEP_SIZE = z_resolution * oneMmEqivStep
         interpolationF = scipy.interpolate.LinearNDInterpolator(points=pointCloud, values=voxelValues)
 
-        print("\tFirst run:")
+        print("\n\tFirst run:")
         skeleton2nd, _, _, _, _ = self.oor(initialPoly, STEP_SIZE, XGrid, YGrid, interpolationF)
 
-        print("\tSecond run:")
+        print("\n\tSecond run:")
         R3polynomial2nd, _ = self.fitParamPolytoSkeleton(np.array(skeleton2nd), degree=8)
 
         msg2plot = "\tRefitting parametrised polynomial to re-sampled data (2nd run)"
@@ -409,10 +409,10 @@ class LeadWorks:
         stdFittingError = np.std(fittingErrs, axis=0)
         maxFittingError = np.max(fittingErrs, axis=0)
 
-        print("\t\t\tMax off-model: {:.4}, Mean off-model: {:.4}\n".format(maxFittingError, meanFittingError))
+        print("\t\tMax off-model: {:.4}, Mean off-model: {:.4}".format(maxFittingError, meanFittingError))
         if maxFittingError > 0.35 and maxFittingError > (meanFittingError + 3 * stdFittingError):
-            print("\t\tCheck for outliers/make sure chosen polynomial degree is appropriate.\n "
-                  "\t\tIn most cases selection should be fine.\n")
+            print("\t\t...Check for outliers/make sure chosen polynomial degree is appropriate.\n "
+                  "\t\t...In most cases selection should be fine.\n")
 
         return r3polynomial, avgStepsPerMm
 

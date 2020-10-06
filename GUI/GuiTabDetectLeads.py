@@ -23,7 +23,7 @@ class GuiTabDetectLeads(QWidget):
         super(GuiTabDetectLeads, self).__init__(parent)
         self.selected_subj_ANT = ''
 
-        # General settings/variables/helper files needed needed at some point
+        # General settings/variables/helper files needed at some point
         self.cfg = Configuration.load_config(ROOTDIR)
         if os.path.isdir(self.cfg['folders']['nifti']):
             self.niftidir = self.cfg['folders']['nifti']
