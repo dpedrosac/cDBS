@@ -16,8 +16,7 @@ from utils.HelperFunctions import Configuration
 
 
 class GuiSettingsNiftiAnts(QWidget):
-    """ Helper GUI, which enables to change the settings of the different steps with the ANts Toolbox to analyse NIFTI
-      data"""
+    """ Helper GUI, enabling setting changesconcerning different steps with the ANts Toolbox to analyse NIFTI data"""
 
     def __init__(self, parent=None):
         super(GuiSettingsNiftiAnts, self).__init__(parent=None)
@@ -27,7 +26,7 @@ class GuiSettingsNiftiAnts(QWidget):
 
         # General appearance of the GUI
         self.setFixedSize(800, 600)
-        self.setWindowTitle('Settings for working with NIFTI files and ANTS Toolbox')
+        self.setWindowTitle('Settings for working with NIFTI files and ANTs Toolbox')
         self.show()
 
         # Create general layout
@@ -318,7 +317,7 @@ class GuiSettingsNiftiAnts(QWidget):
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("No default settings found, please double check the folder content. Continuing "
-                           "with same settings. ")
+                           "with same settings.")
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Close)
             msgBox.exec()
@@ -400,16 +399,16 @@ class GuiSettingsNiftiAnts(QWidget):
 
         idx_template = self.lineRegistrationMethod.findText(self.cfg["preprocess"]["normalisation"]["template_image"],
                                                             QtCore.Qt.MatchFixedString)
-
         if idx_template >= 0:
             self.lineRegistrationMethod.setCurrentIndex(idx_template)
         self.lineTemplatesAvailable.currentTextChanged.connect(self.comboChangedNormalisation)
 
+    # ====================    Actions when buttons are pressed      ====================
     @QtCore.pyqtSlot()
     def viewRegistrationCmdLine(self):
-        """opens the CmdLine to write custom registration routines. For the correct arguments please have a look at the
-        homepage from ANTs documentation (e.g.https://github.com/ANTsX/ANTs/wiki/Anatomy-of-an-antsRegistration-call).
-        A n example of how to implement something similar can be found in the [private] directory """
+        """opens CmdLine to write custom registration settings. For correct arguments cf. to ANTs environment homepage
+        (e.g.https://github.com/ANTsX/ANTs/wiki/Anatomy-of-an-antsRegistration-call). An example of how to implement
+        something similar can be found in the [private] directory """
         from subprocess import Popen
 
         if sys.platform == 'linux':
@@ -418,7 +417,6 @@ class GuiSettingsNiftiAnts(QWidget):
         elif sys.platform == 'macos':
             print('Not yet implemented!!')
 
-    # In the next lines, actions are defined when rButtons are pressed; Principally, button is checked and cfg updated
     @QtCore.pyqtSlot()
     def onClickedRBTN_shrink(self):
         radioBtn = self.sender()

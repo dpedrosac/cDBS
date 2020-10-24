@@ -2,47 +2,48 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 import re
+import sys
 
-import utils.HelperFunctions as HF
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
-     QPushButton, QLineEdit
+    QPushButton, QLineEdit
+
+import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
+from utils.HelperFunctions import Configuration, FileOperations, Output
 
 
 class RenameFolderNames(QWidget):
-    """ This is a GUI to provide the information necessary to change the name of the folders in the NIFTI directory,
-    e.g. from subjx to DBS"""
+    """ GUI providing necessary information to change directory names in the NIFTI folder e.g. from subjxx to DBSxx"""
 
-    def __init__(self, ROOTDIR, parent=None):
+    def __init__(self, parent=None):
         super(QWidget, self).__init__(parent)
         self.setFixedSize(600, 250)
         self.setWindowTitle("Batch convert subjects' folder names")
         self.show()
 
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
-        if os.path.isdir(self.cfg["folders"]["nifti"]):
-            self.niftidir = self.cfg["folders"]["nifti"]
+        self.cfg = Configuration.load_config(ROOTDIR)
+        if os.path.isdir(self.cfg['folders']['nifti']):
+            self.niftidir = self.cfg['folders']['nifti']
         else:
-            self.niftidir = os.getcwd()
+            self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
+        Configuration.save_config(ROOTDIR, self.cfg)
 
-        # General layout for the tab view
+        # Create general layout
         self.layout = QVBoxLayout(self)
         self.BottomButtons = QHBoxLayout()
         self.GroupBox1 = QGroupBox("Change prefix of folders:")
         self.EnterDataLayout = QHBoxLayout(self.GroupBox1)
 
-        self.lblPrefix = QLabel('Old suffix: {}'.format('\u0332'.join(self.cfg["folders"]["prefix"])))
+        self.lblPrefix = QLabel('Old suffix: {}'.format('\u0332'.join(self.cfg['folders']['prefix'])))
         self.Arrow = QLabel('->\t')
         self.lineEditChangedPrefix = QLineEdit()
         self.lineEditChangedPrefix.setPlaceholderText("Enter here the new folder prefix (e.g. 'IPS-patient')")
         regex = QtCore.QRegExp("[a-z-A-Z-0-9_.]+")
         validator1 = QtGui.QRegExpValidator(regex)
         self.lineEditChangedPrefix.setValidator(validator1)
-        self.lineEditChangedPrefix.setToolTip("Please enter here the string that replaces the suffix (see left). "
-                                              "\nIt may only contain characters, numbers and the special characters: "
-                                              "'_' and '.', but not at the end ")
+        self.lineEditChangedPrefix.setToolTip(setToolTips.renameFoldersInput())
 
         self.EnterDataLayout.addWidget(self.lblPrefix)
         self.EnterDataLayout.addWidget(self.Arrow)
@@ -59,24 +60,15 @@ class RenameFolderNames(QWidget):
         self.layout.addWidget(self.GroupBox1)
         self.layout.addLayout(self.BottomButtons)
 
+    # ====================    Actions when buttons are pressed      ====================
     @QtCore.pyqtSlot()
     def on_OKBtn_clicked(self):
-        prefix = self.cfg["folders"]["prefix"]
+        prefix = self.cfg['folders']['prefix']
         new_prefix = self.lineEditChangedPrefix.text()
         if not new_prefix:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("No prefix was entered!")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Close)
-            msgBox.exec()
+            Output.msgBox(text="No prefix was entered!", title="Warning")
         elif new_prefix.endswith('_') or new_prefix.endswith('.'):
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("Special characters '_' or '.' should no be used at the end of the string")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Close)
-            msgBox.exec()
+            Output.msgBox(text="Special characters '_' or '.' should be avoided at the end", title="Warning")
         else:
             msg = 'Are you sure you want to change the prefix of all folders in the Nifti-Directory ' \
                   'from \n\n{:>10} \tto {:>10}?'.format(prefix, new_prefix)
@@ -84,9 +76,9 @@ class RenameFolderNames(QWidget):
             ret = QMessageBox.question(self, 'MessageBox', msg,
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                self.cfg["folders"]["prefix"] = self.lineEditChangedPrefix.text()
+                self.cfg['folders']['prefix'] = self.lineEditChangedPrefix.text()
                 self.ChangeFolderNames(prefix, new_prefix)
-                HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
+                Configuration.save_config(ROOTDIR, self.cfg)
                 self.close()
 
     def ChangeFolderNames(self, prefix, new_prefix):
@@ -94,7 +86,7 @@ class RenameFolderNames(QWidget):
 
         list_pre = [name for name in os.listdir(self.niftidir)
                     if (os.path.isdir(os.path.join(self.niftidir, name)) and prefix in name)]
-        temp = re.compile("([a-zA-Z._-]+)([0-9]+)")
+        temp = re.compile('([a-zA-Z._-]+)([0-9]+)')
         list_post = [new_prefix + temp.match(numbers).groups()[1] for numbers in list_pre]
         [os.rename(os.path.join(self.niftidir, prename), os.path.join(self.niftidir, postname))
             for prename, postname in zip(list_pre, list_post)]

@@ -26,10 +26,18 @@ def renameFolders():
            'the configuration file'
     return HF.LittleHelpers.split_lines(text)
 
+
+# ==============================    settingsRenameFolders   ==============================
+def renameFoldersInput():
+    text = "Please enter here the string that replaces the suffix (see left). \nIt may only contain characters, " \
+           "numbers and the special characters: '_' and '.', but not at the end "
+    return HF.LittleHelpers.split_lines(text)
+
+
 # ==============================    Tab 2 - GUITabPreprocessANTs   ==============================
 def ChangeWdirNIFTI():
     text = ('Opens a dialog in which the NIFTI directory may be changed. For actions to take place, press '
-            '"reload files" button')
+                '"reload files" button')
     return HF.LittleHelpers.split_lines(text)
 
 def N4BiasCorrection():

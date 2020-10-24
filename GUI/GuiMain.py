@@ -3,14 +3,13 @@
 
 import os
 import sys
-
 from PyQt5.QtWidgets import QWidget, QApplication, QVBoxLayout, QMainWindow, QTabWidget
-from utils.HelperFunctions import Configuration
-import utils.HelperFunctions as HF
+
+from GUI.GuiTabDetectLeads import GuiTabDetectLeads
 from GUI.GuiTabGeneral import GuiTabGeneral
 from GUI.GuiTabPreprocessANTs import GuiTabPreprocessANTs
-from GUI.GuiTabDetectLeads import GuiTabDetectLeads
 from dependencies import ROOTDIR
+from utils.HelperFunctions import Configuration
 
 
 class cDBSMain(QMainWindow):
@@ -34,14 +33,12 @@ class TabContent(QWidget):
         self.selected_subj_ANT = ''
 
         self.cfg = Configuration.load_config(ROOTDIR)
-        #self.cfg = HF.LittleHelpers.load_config(ROOTDIR) # TODO: Remove if stable
         if os.path.isdir(self.cfg["folders"]["nifti"]):
             self.niftidir = self.cfg["folders"]["nifti"]
         else:
             self.niftidir = os.getcwd()
         self.cfg["folders"]["rootdir"] = ROOTDIR
         Configuration.save_config(ROOTDIR, self.cfg)
-#        HF.LittleHelpers.save_config(ROOTDIR, self.cfg) # TODO: Remove if stable
 
         # General layout for the tab view and initialisation of tabs
         self.layout = QVBoxLayout(self)

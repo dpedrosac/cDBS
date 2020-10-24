@@ -4,21 +4,20 @@
 import os
 import sys
 
-import utils.HelperFunctions as HF
-from utils.settingsDCM2NII import GuiSettingsDCM2NII
-from utils import preprocDCM2NII
-import private.allToolTips as setToolTips
-from dependencies import ROOTDIR
-
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
-     QFileDialog, QPushButton, QMainWindow, QListWidget
+    QFileDialog, QPushButton, QMainWindow, QListWidget
+
+import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
+from utils import preprocDCM2NII
+from utils.HelperFunctions import Configuration, FileOperations, Output
+from utils.settingsDCM2NII import GuiSettingsDCM2NII
 
 
 class MainGuiDcm2nii(QMainWindow):
-    """ This is a GUI aiming at selecting the folders/subjects of whom imaging will be transformed from DICOM to NIFTI-
-    files using Chris Rordens dcm2niix routines. It allows batch processing of data and changing some of the settings
-    to later run a wrapper for the code"""
+    """ GUI aiming at selecting folders/subjects of whom imaging will be transformed from DICOM to NIFTI-files using
+    Chris Rordens dcm2niix routines. Allows batch processing and changing some settings to later run wrapper """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -34,15 +33,15 @@ class ContentGuiDCM2Nii(QWidget):
         super(QWidget, self).__init__(parent)
 
         # Load configuration files and general settings
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
-        if os.path.isdir(self.cfg["folders"]["dicom"]):
-            self.dicomdir = self.cfg["folders"]["dicom"]
+        self.cfg = Configuration.load_config(ROOTDIR)
+        if os.path.isdir(self.cfg['folders']['dicom']):
+            self.dicomdir = self.cfg['folders']['dicom']
         else:
-            HF.msg_box(text='No directory with DICOM files defined, please select manually.', title='NO DICOM folder')
-            self.dicomdir = QFileDialog.getExistingDirectory(self, 'Please select the directory of DICOM folders')
-        self.cfg["folders"]["dicom"] = self.dicomdir
-        self.cfg["folders"]["rootdir"] = ROOTDIR
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+            self.dicomdir = FileOperations.set_wdir_in_config(self.cfg, foldername='dicom', init=True)
+
+        self.cfg['folders']['dicom'] = self.dicomdir
+        self.cfg['folders']['rootdir'] = ROOTDIR
+        Configuration.save_config(ROOTDIR, self.cfg)
 
         # Create general layout
         self.tot_layout = QVBoxLayout(self)
@@ -59,7 +58,7 @@ class ContentGuiDCM2Nii(QWidget):
         self.btn_dicomdir.clicked.connect(self.change_dicomdir)
         self.btn_savedir = QPushButton('Save directory \nto config file')
         self.btn_savedir.setFixedSize(150, 40)
-        self.btn_savedir.setToolTip(HF.LittleHelpers.split_lines(setToolTips.saveDirButton()))
+        self.btn_savedir.setToolTip(Output.split_lines(setToolTips.saveDirButton()))
         self.btn_savedir.clicked.connect(self.save_cfg)
 
         hlay_upper = QHBoxLayout()
@@ -128,7 +127,7 @@ class ContentGuiDCM2Nii(QWidget):
 
         try:
             self.mInput.clear()
-            items = HF.list_folders(inputdir=self.cfg["folders"]["dicom"], prefix='', files2lookfor='')
+            items = FileOperations.list_folders(inputdir=self.cfg['folders']['dicom'], prefix='', files2lookfor='')
             self.add_available_subj(items)
         except FileExistsError:
             print('{} without any valid files/folders, continuing ...'.format(self.dicomdir))
@@ -152,21 +151,20 @@ class ContentGuiDCM2Nii(QWidget):
         """A new window appears in which the working directory can be set; besides, data is stored in the preferences
         file so that they will be loaded automatically next time"""
 
-        self.dicomdir = QFileDialog.getExistingDirectory(self, 'title')
+        self.dicomdir = FileOperations.set_wdir_in_config(self.cfg, foldername='dicom')
         self.label_dicomdir.setText('dicomDIR: {}'.format(self.dicomdir))
-        self.mInput.clear()
-        items = HF.list_folders(inputdir=self.cfg["folders"]["dicom"], prefix='', files2lookfor='')
-        # items = self.read_subjlist(dicomdir=self.cfg["folders"]["dicom"])
+        self.cfg['folders']['dicom'] = self.dicomdir
 
+        self.mInput.clear()
+        items = FileOperations.list_folders(inputdir=self.cfg['folders']['dicom'], prefix='', files2lookfor='')
         self.add_available_subj(items)
-        self.cfg["folders"]["dicom"] = self.dicomdir
-        HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
 
     def save_cfg(self):
         """Function intended to save the DICOM directory once button is pressed"""
-        self.cfg["folders"]["dicom"] = self.dicomdir
-        HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-        HF.msg_box(text="Folder changed in the configuration file to {}".format(self.dicomdir), title='Changed folder')
+
+        self.cfg['folders']['dicom'] = self.dicomdir
+        Configuration.save_config(self.cfg['folders']['rootdir'], self.cfg)
+        Output.msg_box(text="Folder changed in configuration to {}".format(self.dicomdir), title="Changed folder")
 
     def settings_show(self):
         """Opens a new GUI in which the settings for the tansformation con be changed and saved to config file"""
@@ -179,14 +177,11 @@ class ContentGuiDCM2Nii(QWidget):
         print('in total, {} folders were selected'.format(len(folderlist)))
 
         if not folderlist:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("At least one folder with DICOM data must be selected!")
-            msg.setWindowTitle("No directory selected")
-            msg.exec_()
+            Output.msg_box(text="At least one folder with DICOM data needed!", title="No directory selected")
         else:
             preprocDCM2NII.PreprocessDCM(folderlist)
 
+    # ====================    Actions when buttons are pressed      ====================
     @QtCore.pyqtSlot()
     def update_buttons_status(self):
         self.mBtnUp.setDisabled(not bool(self.mOutput.selectedItems()) or self.mOutput.currentRow() == 0)

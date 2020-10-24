@@ -667,6 +667,22 @@ class FileOperations:
             if row_b is not None:  # join
                 yield row_b[0:1] + row_a  # cut 1st column from 2nd row
 
+    @staticmethod
+    def set_wdir_in_config(cfg, foldername, init=False):
+        """Generic function setting the working directory (e.g. DICOM, nifti, etc."""
+        from PyQt5.QtWidgets import QFileDialog
+        text2display = 'directory of nii-files' if foldername=='nifti' else 'dicom-folder'
+        cfg['folders'][foldername] = ''
+        while cfg['folders'][foldername] == '':
+            if init:
+                Output.msg_box(text="Directory not found, please select different one.", title="Directory not found")
+            selected_directory = QFileDialog.getExistingDirectory(caption="Please select the {}".format(text2display))
+            cfg['folders'][foldername] = selected_directory
+            init = True
+            Configuration.save_config(ROOTDIR, cfg)
+
+        return selected_directory
+
 
 class MatlabEquivalent:
     def __init__(self, _debug=False):

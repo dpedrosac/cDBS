@@ -28,7 +28,9 @@ class GuiTabDetectLeads(QWidget):
         if os.path.isdir(self.cfg['folders']['nifti']):
             self.niftidir = self.cfg['folders']['nifti']
         else:
-            self.niftidir = os.getcwd()
+            self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
+
+        self.cfg['folders']['nifti'] = self.niftidir
         self.cfg['folders']['rootdir'] = ROOTDIR
         Configuration.save_config(ROOTDIR, self.cfg)
 
@@ -118,21 +120,13 @@ class GuiTabDetectLeads(QWidget):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
-        self.niftidir = QFileDialog.getExistingDirectory(self, "Please select the directory of nii-files")
+        self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti')
+        self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
+        self.cfg['folders']['nifti'] = self.niftidir
 
-        if not self.niftidir == '':
-            self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
-
-            self.cfg['folders']['nifti'] = self.niftidir
-            with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
-                yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
-                               explicit_start=True, allow_unicode=True, encoding='utf-8')  # saves folder to yaml-file
-
-            self.availableNiftiTab.clear()
-            itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], self.cfg['folders']['prefix'])
-            self.add_available_items(self.availableNiftiTab, itemsChanged)
-        else:
-            self.niftidir = self.cfg['folders']['nifti']
+        self.availableNiftiTab.clear()
+        itemsChanged = FileOperations.list_folders(self.niftidir, self.cfg['folders']['prefix'])
+        self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is

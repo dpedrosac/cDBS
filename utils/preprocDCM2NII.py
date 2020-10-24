@@ -6,10 +6,12 @@ import re
 import subprocess
 import sys
 import time
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
-import pandas as pds
+
 import multiprocessing as mp
+import pandas as pds
+
 from dependencies import ROOTDIR
+from utils.HelperFunctions import Output, Configuration, FileOperations
 
 
 class PreprocessDCM:
@@ -30,7 +32,7 @@ class PreprocessDCM:
 
         if not os.path.isdir(self.DCM2NIIX_ROOT):
             Output.msg_box(text="Extracting imaging data from DICOM-files not successful because of wrong "
-                                          "folder for 'dcm2niix'.", title="Wrong folder!")
+                                "folder for 'dcm2niix'.", title="Wrong folder!")
             return
 
         if not os.path.isdir(self.cfg['folders']['nifti']):
@@ -76,10 +78,8 @@ class PreprocessDCM:
         print()
 
     def dcm2niix_multiprocessing(self, name_subj, no_subj, dcm2niix_bin, last_idx, total_subj, status):
-        """this function is intended to provide a multiprocessing approach to speed up extration of DICOM data to nifti
-        files"""
+        """function intended to provide multiprocessing approach to speed up extraction of DICOM data to nifti files"""
 
-        # general settings for the extraction to work and log data
         modalities = ['CT', 'MRI']
         if self.logfile:
             log_filename = os.path.join(ROOTDIR, 'logs', 'log_DCM2NII_' + str(no_subj + last_idx) +
@@ -88,10 +88,9 @@ class PreprocessDCM:
             log_filename = os.devnull
 
         subj_outdir = os.path.join(self.outdir, self.cfg['folders']['prefix'] + str(no_subj + last_idx))
-
         FileOperations.create_folder(subj_outdir)
         start_time_subject = time.time()
-        keptfiles, deletedfiles = ([] for i in range(2))
+        keptfiles, deletedfiles = ([] for _ in range(2))
 
         for mod in modalities:
             status.put((name_subj, mod, no_subj, total_subj))
@@ -127,8 +126,8 @@ class PreprocessDCM:
                     '\n\t{}'.format('\n\t'.join(os.path.split(x)[1] for x in sorted(set(deletedfiles)))),
                     time.time() - start_time_subject)
         Output.logging_routine(text=Output.split_lines(log_text), cfg=self.cfg,
-                                         subject=self.cfg['folders']['prefix'] + str(no_subj), module='dcm2nii',
-                                         opt=self.cfg['preprocess']['dcm2nii'], project="")
+                               subject=self.cfg['folders']['prefix'] + str(no_subj), module='dcm2nii',
+                               opt=self.cfg['preprocess']['dcm2nii'], project="")
 
     def create_csv_subjlist(self, subjlist, first_index):
         """ this function creates a csv-files which aims at providing information about which name/pseudnonym, etc.
@@ -186,19 +185,19 @@ class PreprocessDCM:
 
         if sys.platform == 'linux':
             dcm2niix_bin = 'dcm2niix'
-        elif (sys.platform == 'macos' or sys.platform == 'darwin'):
+        elif sys.platform == 'macos' or sys.platform == 'darwin':
             dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'macos', 'dcm2niix')
         else:
-            print("Chris Rordens dcm2niix routine not found, please make sure it is available.", end='', flush=True)
+            print("Chris Rordens dcm2niix routines not found, please make sure they are available.", end='', flush=True)
             dcm2niix_bin = False
 
         return dcm2niix_bin
 
     @staticmethod
     def create_subjlist(folderlist):
-        """creates a set of subjects; Especially, different modalities are summarised as one iff filenames identical;
+        """creates set of subjects; Especially, different modalities are summarised as one iff filenames identical;
         extraction of DICOM is somehow different to rest of lists because of possibly >1 folders per subj., so that
-        separate function is necessary instead of the one in [HelperFunction]"""
+        separate function is necessary instead of the one in [HelperFunctions.py]"""
 
         allnames = [re.findall("[a-z][^A-Z]*", x) for x in folderlist]
         available_subj = set(x for letters in allnames for x in letters)
@@ -207,7 +206,7 @@ class PreprocessDCM:
 
     @staticmethod
     def get_index_nifti_folders(niftidir, prefix='subj'):
-        """this function provides the index of the last processed subject. That is, in a list of consecutive recordings,
+        """function providing indices of the last processed subject. That is, in a list of consecutive recordings,
          nifti-folder is opened and already available folders are counted"""
 
         list_dirs = [subdir for subdir in os.listdir(niftidir) if (prefix in subdir and
@@ -215,10 +214,7 @@ class PreprocessDCM:
                                                                    len(os.listdir(os.path.join(niftidir, subdir))) > 0)]
         try:
             all_endings = [int(re.search(r'(' + prefix + ')(\w+)', x).group(2)) for x in list_dirs]
-            if not all_endings:
-                idx = 0
-            else:
-                idx = sorted(all_endings)[-1]
+            idx = 0 if not all_endings else sorted(all_endings)[-1]
         except ValueError:
             idx = 0
 

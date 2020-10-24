@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
 
 import utils.HelperFunctions as HF
 from GUI.GUIdcm2nii import MainGuiDcm2nii
-from utils.settingsRenameFolders import RenameFolderNames
+from utils.renameNiftiFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
 import private.allToolTips as setToolTips

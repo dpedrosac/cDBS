@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import private.allToolTips as setToolTips
-import utils.N4BiasCorrection_ANTs as N4BiasCorr
+import utils.n4BiasCorrection_ANTs as N4BiasCorr
 import utils.preprocANTSpy as ANTspyRoutines
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
@@ -24,7 +24,13 @@ class GuiTabPreprocessANTs(QWidget):
         self.selected_subj_ANT = ''
 
         self.cfg = Configuration.load_config(ROOTDIR)
-        self.niftidir = self.cfg['folders']['nifti'] if os.path.isdir(self.cfg['folders']['nifti']) else os.getcwd()
+        if os.path.isdir(self.cfg['folders']['nifti']):
+            self.niftidir = self.cfg['folders']['nifti']
+        else:
+            self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
+
+        self.cfg['folders']['nifti'] = self.niftidir
+        self.cfg['folders']['rootdir'] = ROOTDIR
         Configuration.save_config(ROOTDIR, self.cfg)
 
         # Customize tab
@@ -113,17 +119,13 @@ class GuiTabPreprocessANTs(QWidget):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
-        self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of *.nii-files')
-        if not self.niftidir == "":
-            self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
-            self.cfg['folders']['nifti'] = self.niftidir
-            Configuration.save_config(ROOTDIR, self.cfg)
+        self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti')
+        self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
+        self.cfg['folders']['nifti'] = self.niftidir
 
-            self.availableNiftiTab.clear()
-            itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], self.cfg['folders']['prefix'])
-            self.add_available_items(self.availableNiftiTab, itemsChanged)
-        else:
-            self.niftidir = self.cfg['folders']['nifti']
+        self.availableNiftiTab.clear()
+        itemsChanged = FileOperations.list_folders(self.niftidir, self.cfg['folders']['prefix'])
+        self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is
@@ -169,9 +171,9 @@ class GuiTabPreprocessANTs(QWidget):
                             "(For this option, numerous folders are possible for batch processing)",
                        title="No subject selected")
         else:
-            msg = "Are you sure you want to debias all NIFTI-files in the following folders:\n\n" \
+            msg = "Are you sure you want to de-bias all NIFTI-files in the following folder(s):\n\n" \
                   "{}".format(''.join('--> {}\n'.format(c) for c in self.selected_subj_ANT))
-            ret = QMessageBox.question(self, 'Start Debiasing', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            ret = QMessageBox.question(self, "Start Debiasing", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
                 N4BiasCorr.BiasCorrection().N4BiasCorrection(subjects=self.selected_subj_ANT)
 

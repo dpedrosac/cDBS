@@ -2,35 +2,31 @@
 # -*- coding: utf-8 -*-
 
 import os
-import yaml
+import sys
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 from GUI.GUIdcm2nii import MainGuiDcm2nii
-from utils.settingsRenameFolders import RenameFolderNames
+from utils.renameNiftiFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
 import private.allToolTips as setToolTips
-import sys
 
 class GuiTabGeneral(QWidget):
     """General tab which enables import of DICOM files but also a set of distinct options such as viewing the
     metadata or displaying images in an external viewer and renaming folders"""
 
-    def __init__(self, parent=None, ROOTDIR=''):
+    def __init__(self, parent=None):
         super(GuiTabGeneral, self).__init__(parent)
         self.selected_subj_Gen = ''
 
         # General settings/variables/helper files needed needed at some point
-        if not ROOTDIR:
-            ROOTDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
         self.cfg = Configuration.load_config(ROOTDIR)
         if os.path.isdir(self.cfg['folders']['nifti']):
             self.niftidir = self.cfg['folders']['nifti']
         else:
-            self.niftidir = os.getcwd()
+            self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
         self.cfg['folders']['rootdir'] = ROOTDIR
         Configuration.save_config(ROOTDIR, self.cfg)
 
@@ -110,20 +106,13 @@ class GuiTabGeneral(QWidget):
         """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
          in the configuration file, so that upon the next start there is the same folder selected automatically"""
 
-        self.niftidir = QFileDialog.getExistingDirectory(self, 'Please select the directory of nii-files')
-        if not self.niftidir == '':
-            self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
+        self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti')
+        self.lblWdirTab.setText('wDIR: {}'.format(self.niftidir))
+        self.cfg['folders']['nifti'] = self.niftidir
 
-            self.cfg['folders']['nifti'] = self.niftidir
-            with open(os.path.join(ROOTDIR, 'config_imagingTB.yaml'), 'wb') as settings_mod:
-                yaml.safe_dump(self.cfg, settings_mod, default_flow_style=False,
-                               explicit_start=True, allow_unicode=True, encoding='utf-8')
-
-            self.availableNiftiTab.clear()
-            itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], self.cfg['folders']['prefix'])
-            self.add_available_items(self.availableNiftiTab, itemsChanged)
-        else:
-            self.niftidir = self.cfg['folders']['nifti']
+        self.availableNiftiTab.clear()
+        itemsChanged = FileOperations.list_folders(self.niftidir, self.cfg['folders']['prefix'])
+        self.add_available_items(self.availableNiftiTab, itemsChanged)
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
@@ -177,7 +166,7 @@ class GuiTabGeneral(QWidget):
     def run_rename_folders(self):
         """Renames all folders with a similar prefix; After that manual reloading is necessary"""
 
-        self.convertFolders = RenameFolderNames(ROOTDIR)
+        self.convertFolders = RenameFolderNames()
         self.convertFolders.show()
 
     def show_nifti_files(self):
