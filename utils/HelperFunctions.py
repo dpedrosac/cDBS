@@ -401,7 +401,7 @@ class Output:
             hdr = "=" * 110 + "\nAnalysis pipeline for " + project + " project.\n\nThis file summarises the steps taken " \
                                                                      "so that at the end, all preprocessing steps and options can be reproduced\n \nLog-File " \
                                                                      "for: \t\t{}\n \n".format(subject) + "=" * 110
-            outfile.write(LittleHelpers.split_lines(hdr))
+            outfile.write(Output.split_lines(hdr))
             outfile.close()
 
         with open(logfile, 'a+') as outfile:
@@ -412,7 +412,7 @@ class Output:
 
             output = "\nRunning {} for {} with the following options:\n" \
                      "\n{}\n".format(module, subject, string_opt) + "-" * 110
-            outfile.write("\n" + LittleHelpers.split_lines(output))
+            outfile.write("\n" + Output.split_lines(output))
             outfile.write("\n\n" + text + "\n")
             outfile.write("\n" + "-" * 110)
 
@@ -468,11 +468,11 @@ class Imaging:
         """Sets the viewer_option in the configuration file"""
         from dependencies import ROOTDIR
 
-        cfg = LittleHelpers.load_config(ROOTDIR)
+        cfg = Configuration.load_config(ROOTDIR)
         if viewer_opt == 'itk-snap':  # to-date, only one viewer is available. May be changed in a future
             if not cfg["folders"]["path2itksnap"]:
                 cfg["folders"]["path2itksnap"] = LocationCheck.FileLocation.itk_snap_check(ROOTDIR)
-                LittleHelpers.save_config(ROOTDIR, cfg)
+                Configuration.save_config(ROOTDIR, cfg)
 
         return cfg["folders"]["path2itksnap"]
 
