@@ -6,7 +6,6 @@ import multiprocessing as mp
 import os
 import re
 import shutil
-import sys
 import time
 from itertools import compress
 
@@ -38,8 +37,8 @@ class RegistrationANTs:
         for idx, seqs in enumerate(sequences):
             file_template = [x for x in template if re.search(r'\w+.({}).'.format(seqs), x, re.IGNORECASE)]  # corresponding template
             if not file_template:
-                Output.msg_box(text='No template found. Please ensure templates are installed at "./ext/templates"',
-                            title='Template missing!') # TODO install templates by default!
+                Output.msg_box(text="No template found. Please ensure templates are installed at './ext/templates'",
+                            title="Template missing!") # TODO install templates by default!
                 return
 
             regex_complete = '{}{}'.format(self.cfg['preprocess']['ANTsN4']['prefix'], seqs)
@@ -104,7 +103,7 @@ class RegistrationANTs:
          if re.search(r'\w+(?!_).({}).'.format(included_sequences[1]), x[0], re.IGNORECASE) and x[0].endswith('.nii')]
 
         if not file_ID_MRI:
-            Output.msg_box(text="Bias-corrected MRI not found. Please double-check", title="Preprocessed MRI unavailable")
+            Output.msg_box(text="Bias-corrected MRI not found!", title="Preprocessed MRI unavailable")
             return
         fileIDs = list(FileOperations.inner_join(file_ID_CT, file_ID_MRI))
 
@@ -188,7 +187,6 @@ class RegistrationANTs:
         if run == 1:
             metric = self.cfg['preprocess']['registration']['metric'][0]
         else:
-            # return TODO this part is not working whatsoever; requires debugging. No changes applied",
             self.cfg['preprocess']['registration']['default_registration'] = 'yes' # TODO: must be changed if non-default works
             metric = self.cfg['preprocess']['registration']['metric'][0]
 
@@ -203,12 +201,10 @@ class RegistrationANTs:
             if name_of_file:
                 os.rename(name_of_file[0],os.path.join(input_folder, files2rename[key]))
 
-
         ants.image_write(registered_images['warpedmovout'], filename=filename_save)
-        FileOperations.create_folder(os.path.join(input_folder, "debug")) #creates
+        FileOperations.create_folder(os.path.join(input_folder, "debug"))
 
-        # 'Previous registrations' are moved to debug-folder
-        if run > 1:
+        if run > 1: #  Previous registrations are moved to debug-folder
             filename_dest = re.sub(r'({}run[0-9]_)+({})'.format(self.cfg['preprocess']['registration']['prefix'],
                                                                 self.cfg['preprocess']['ANTsN4']['prefix']),
                                    '{}RUNPREV{}_{}'.format(self.cfg['preprocess']['registration']['prefix'], lastrun,

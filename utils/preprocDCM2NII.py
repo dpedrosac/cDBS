@@ -95,7 +95,8 @@ class PreprocessDCM:
         for mod in modalities:
             status.put((name_subj, mod, no_subj, total_subj))
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
-            input_folder_files = [f.path for f in os.scandir(input_folder_name) if (f.is_dir() and '100' in f.path)]
+            input_folder_files = [f.path for f in os.scandir(input_folder_name)
+                                  if (f.is_dir() and ('100' in f.path or '001' in f.path))]
             if type(input_folder_files) == list:
                 input_folder_files = ''.join(input_folder_files)
 

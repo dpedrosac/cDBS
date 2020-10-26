@@ -3,6 +3,7 @@
 
 import os
 import sys
+
 from PyQt5.QtWidgets import QWidget, QApplication, QVBoxLayout, QMainWindow, QTabWidget
 
 from GUI.GuiTabDetectLeads import GuiTabDetectLeads
@@ -33,11 +34,11 @@ class TabContent(QWidget):
         self.selected_subj_ANT = ''
 
         self.cfg = Configuration.load_config(ROOTDIR)
-        if os.path.isdir(self.cfg["folders"]["nifti"]):
-            self.niftidir = self.cfg["folders"]["nifti"]
+        if os.path.isdir(self.cfg['folders']['nifti']):
+            self.niftidir = self.cfg['folders']['nifti']
         else:
             self.niftidir = os.getcwd()
-        self.cfg["folders"]["rootdir"] = ROOTDIR
+        self.cfg['folders']['rootdir'] = ROOTDIR
         Configuration.save_config(ROOTDIR, self.cfg)
 
         # General layout for the tab view and initialisation of tabs

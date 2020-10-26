@@ -50,7 +50,6 @@ class GuiTabDetectLeads(QWidget):
 
         self.btnChangeWdir = QPushButton('Change working directory')
         self.btnChangeWdir.clicked.connect(self.change_wdir)
-        # if changing folder is canceled, the whole script shuts down (macOS Catalina)
         self.btnReloadFilesTab = QPushButton('Reload files')
         self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
 
@@ -86,10 +85,7 @@ class GuiTabDetectLeads(QWidget):
         self.btn_QC_LeadDetect.setToolTip(setToolTips.compareNIFTIfiles())
         self.btn_QC_LeadDetect.clicked.connect(self.VisualiseLeadDetection)
         self.HBoxLowerLeftTab.addWidget(self.btn_QC_LeadDetect)
-        #        self.HBoxLowerLeftTab.addWidget(self.btn_RegQC)
-        # TODO: whatsoever (?); accurate
-        # TODO: view available (...); in tooltips correction instaed of correcion
-        # TODO: additionally.view available in General -> tooltips: subject instead of just subj
+
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
         self.HBoxUpperRightTab = QVBoxLayout(self.listbox)

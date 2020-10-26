@@ -17,47 +17,60 @@ from dependencies import ROOTDIR
 from utils.HelperFunctions import Output, Configuration
 
 
-class PlotRoutines:
-    """plots the results from the electrode reconstruction/model creation in order to validate the results"""
+class PlotRoutines: #  656 lines so far
+    """Plots results from the electrode reconstruction/model creation in order to validate the results"""
 
     def __init__(self, subject, inputfolder=''):
         self.cfg = Configuration.load_config(ROOTDIR)
         self.debug=False
+        # TODO: new order with a) get 'static data' such as background, trajectory, lead_model, b) plot all results.
+        # TODO: c) include some variable data (markers, rotation) and add some callback functions in form of arrows
 
+        # Get static data, that is lead data, backgrounds and trajectories
         filename_leadmodel = os.path.join(inputfolder, 'elecModels_' + subject + '.pkl')
-        lead_models, intensityProfiles, skelSkalms = self.load_leadModel(inputfolder, filename=filename_leadmodel)
-        self.interactive_plot(lead_models[1], intensityProfiles, skelSkalms)
+        lead_data, intensityProfiles, skelSkalms = self.load_leadModel(inputfolder, filename=filename_leadmodel)
+        sides = self.estimate_sides(lead_data) # determines which side is used in lead_data
+        lead_model, default_positions, default_coordinates = GetData.get_default_lead(lead_data[0])  # all in [mm]
 
-    def interactive_plot(self, lead_model, intensityProfiles, skelSkalms):
+        # Get initial data for both leads
+        marker, coordinates, trajectory, resize = [{} for _ in range(4)]
+        for idx, hemisphere in enumerate(sides):
+            marker[hemisphere], coordinates[hemisphere], trajectory[hemisphere], resize[hemisphere] = \
+                GetData.get_leadModel(self, lead_data[idx], default_positions, default_coordinates, side=hemisphere)
+
+        # Get data for xy-plane estimation/plot
+
+        self.interactive_plot(lead_data[1], intensityProfiles, skelSkalms)
+
+    @staticmethod
+    def estimate_sides(lead_data):
+        """estimates the available sides and returns a list of all available leads; as all data is in LPS (Left,
+        Posterior, Superior) so that side can be deduced from trajectory"""
+
+        sides = []
+        for info in lead_data:
+            sides.append('right') if not info['trajectory'][0, 0] > info['trajectory'][-1, 0] else sides.append('left')
+
+        return sides
+
+    def interactive_plot(self, lead_data, intensityProfiles, skelSkalms):
         """ Start plotting routine according to Lead-DBS implementation [ea_autocoord and ea_manualreconstruction]"""
 
-        lead_properties, default_positions, default_coordinates = GetData.get_default_lead(lead_model) #all in [mm]
-        default_lead_pos = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
-        default_lead_coords_mm = np.array(lead_properties['coords_mm'])
+        lead_model, default_positions, default_coordinates = GetData.get_default_lead(lead_data)  # all in [mm]
 
-        marker, coordinates, trajectory, unrot, resize = GetData.get_leadModelProperties(self, lead_model)
+        # Get estimated positions, coordinates, rotation information and markers for leads
+        marker, coordinates, trajectory, unrot, resize = GetData.get_leadModel(self, lead_data, default_positions,
+                                                                               default_coordinates)
 
         #TODO: elecModels should be updated somehow
 
-        #mainax2 = fig.add_subplot(grid[-1, 4:6]) # TODO: Somethings wrong herewith the grid
-
-        if lead_model['model'] == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
-            coords_temp = np.zeros((4, 3))
-            coords_temp[0, :] = coordinates[0, :]
-            coords_temp[1, :] = np.mean(coordinates[1: 4, :], axis=0)
-            coords_temp[2, :] = np.mean(coordinates[4: 7, :], axis=0)
-            coords_temp[3, :] = coordinates[7, :]
-
-            emp_dist = self.lead_dist(coords=coords_temp)
-        else:
-            emp_dist = self.lead_dist(coords=coordinates, factor=lead_properties['numel'])
-
+        coords_temp, emp_dist = GetData.resize_coordinates(self, coordinates, lead_data)
         mean_empdist = np.mean(emp_dist)
 
-        _, lead_model['trajectory'], _, marker_temp = \
-            self.resolve_coordinates(marker, default_lead_coords_mm, default_lead_pos, lead_model['model'],
-                                     resize_bool=resize, rszfactor=mean_empdist)
-        lead_model = self.marker_update(marker_temp, lead_model)
+        _, lead_data['trajectory'], _, marker_temp = \
+            GetData.resolve_coordinates(self, marker, default_coordinates, default_positions, lead_data,
+                                        resize_bool=resize, rszfactor=mean_empdist)
+        lead_data = GetData.leadInformation_update(marker_temp, lead_data) # TODO doesn't make sense as markers donÄt change at this point
 
         # Start plotting
         fig = plt.figure(facecolor=self.getbgsidecolor(side=0)) # TODO: is it really the side, what is this color actually
@@ -67,22 +80,22 @@ class PlotRoutines:
         grid = gridspec.GridSpec(ncols=4, nrows=3, figure=fig, width_ratios=width, height_ratios=height)
 
         grid_indices = [(0,5), (1,3)]
-        self.plotCTintensities(lead_model, coordinates, trajectory, fig, grid, grid_indices)
+        self.plotCTintensities(lead_data, coordinates, trajectory, fig, grid, grid_indices)
 
         grid_indices = [(-1), (-1)]
-        self.plot_leadInformation(lead_model, mean_empdist, fig, grid, grid_indices)
+        self.plot_leadInformation(lead_data, mean_empdist, fig, grid, grid_indices)
 
-        self.plotCTaxial(lead_model, fig, grid, cmap='gist_gray')
-        self.plot_leadModel(lead_properties, fig, grid)
+        self.plotCTaxial(lead_data, fig, grid, cmap='gist_gray')
+        self.plot_leadModel(lead_model, fig, grid)
 
     def plotCTintensities(self, lead_model, coordinates, trajectory, fig, grid, grid_indices, dimension=['sag', 'cor']):
         """function plotting perpendicular images of the intensities obtained from trajectory coordinates; separate
         function needed here as changes occur in trejectories/markers"""
 
-        dimension = ['sag', 'cor'] # TODO redundant, remove when debugging is finished!
+        # TODO: is moved in the GetData part so that data is available for both leads (if available); this should speed things up
         print("\t...extracting intensities for corresponding CTimaging\t...", end='')
         intensity_matrix, bounding_box, fitvolume = self.get_xyplanes(trajectory=trajectory, lead_model=lead_model,
-                                                          direction=dimension)
+                                                                      direction=dimension)
         print("Done!", flush=True)
         # Prepare plot
         mainax1 = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
@@ -108,7 +121,7 @@ class PlotRoutines:
 
         traj_interp = np.linspace(start=trajectory[0, :], stop=trajectory[-1, :], num=500)
         mainax1.plot([traj_interp[0,0], traj_interp[-1,0]], [traj_interp[0,1], traj_interp[-1,1]],
-                    zs=[traj_interp[0,2], traj_interp[-1,2]], color='magenta')
+                     zs=[traj_interp[0,2], traj_interp[-1,2]], color='magenta')
 
         for c in coordinates:
             self.plot_coordinates(c, mainax1, marker='p', s=250)
@@ -141,7 +154,7 @@ class PlotRoutines:
         text2plot = 'Lead: {} STN \nLead spacing: {:.2f} mm\nRotation:  {} ' \
                     'deg'.format(stn_direction, mean_empdist, lead_model['rotation'])
         axis.text(.6, .25, text2plot, horizontalalignment='center',fontsize=12, ha='center', va='center',
-                    bbox=dict(boxstyle='circle', facecolor='#D8D8D8', ec="0.5", pad=0.5, alpha=1), fontweight='bold')
+                  bbox=dict(boxstyle='circle', facecolor='#D8D8D8', ec="0.5", pad=0.5, alpha=1), fontweight='bold')
 
     def plotCTaxial(self, lead_model, fig, grid, cmap='gist_gray'):
         """function plotting axial sclices at the level of head and tail markers"""
@@ -155,7 +168,7 @@ class PlotRoutines:
         for marker, coordinates in marker_plot.items():
             item += 1
             intensity_matrix, bounding_box, _ = self.get_axialplanes(coordinates, lead_model=lead_model,
-                                                          window_size=15, resolution=.5)
+                                                                     window_size=15, resolution=.5)
             transversal_axis = fig.add_subplot(grid[item, -1], facecolor='None')
             transversal_axis.imshow(intensity_matrix, cmap=cmap, extent=[np.min(bounding_box, axis=1)[0],
                                                                          np.max(bounding_box, axis=1)[0],
@@ -173,22 +186,18 @@ class PlotRoutines:
     @staticmethod
     def plot_leadModel(lead_properties, fig, grid, grid_indices=[(0, -1), (0)],
                        colors=[.3, .5], items_of_interest=['insulation', 'contacts']):
-        """plots a schematic lead model at the left side in order to visualise what it should look like """
+        """Plots schematic lead model at the left side in order to visualise what it should look like """
 
         lead_model_plot = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
-                                  grid_indices[1]], facecolor='None', projection='3d')
-
-        # Prepare data
+                                          grid_indices[1]], facecolor='None', projection='3d')
         lead_plot = dict([(k, r) for k, r in lead_properties.items() if any(z in k for z in items_of_interest)])
         max_coords, min_coords = [[] for _ in range(2)]
 
-        # Start visualisation
         for idx, item in enumerate(items_of_interest):
             for idx_vertices in (range(0, len(lead_plot[item]['vertices']))):
-                mesh = []
                 verts_temp = np.array(lead_plot[item]['vertices'][idx_vertices]) - 1
                 faces_temp = np.array(lead_plot[item]['faces'][idx_vertices]) - 1
-                mesh = Poly3DCollection(verts_temp[faces_temp], facecolors=[colors[idx]] * 3, edgecolor="none",
+                mesh = Poly3DCollection(verts_temp[faces_temp], facecolors=[colors[idx]] * 3, edgecolor='none',
                                         rasterized=True)
                 lead_model_plot.add_collection(mesh)
 
@@ -204,7 +213,6 @@ class PlotRoutines:
                 marker['tail'].append(lead_properties['tail_position'][n])
                 marker['head'].append(lead_properties['tail_position'][n])
             marker['tail'][2] = np.min(min_coords[0])
-
         else:
             for n in range(3):
                 marker['tail'].append(lead_properties['tail_position'][n])
@@ -212,8 +220,7 @@ class PlotRoutines:
 
         color = ['r', 'g']
         for idx, loc in enumerate(marker_position):
-            lead_model_plot.scatter(marker[loc][0] - 1, marker[loc][1] - 2, marker[loc][2],
-                       c=color[idx], s=25)
+            lead_model_plot.scatter(marker[loc][0] - 1, marker[loc][1] - 2, marker[loc][2],c=color[idx], s=25)
 
         lead_model_plot.set_zlim([0, 15])
         lead_model_plot.set_ylim(-4, 4)
@@ -223,106 +230,9 @@ class PlotRoutines:
         lead_model_plot.set_axis_off()
         grid.tight_layout(fig)
 
-    def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_type, resize_bool=False, rszfactor=0):
-        """emulates the function from Lead-DBS ea_resolvecoords; unlike in Lead DBS this is done one at a time cf.
-        https://github.com/netstim/leaddbs/blob/master/templates/electrode_models/ea_resolvecoords.m"""
-
-        if resize_bool:
-            can_dist = np.linalg.norm(lead_positions["head_position"] - lead_positions["tail_position"])
-
-            if lead_type == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
-                coords_temp = np.zeros((4,3))
-                coords_temp[0,:] = lead_coords_mm[0,:]
-                coords_temp[1,:] = np.mean(lead_coords_mm[1: 4,:], axis=0)
-                coords_temp[2,:] = np.mean(lead_coords_mm[4: 7,:], axis=0)
-                coords_temp[3, :] = lead_coords_mm[7, :]
-
-                A = scipy.spatial.distance.cdist(coords_temp, coords_temp, 'euclidean') # move this part into helper function
-                can_eldist = np.sum(np.sum(np.tril(np.triu(A,1),1)))/ 3
-            else:
-                A = np.sqrt(scipy.spatial.distance.cdist(lead_coords_mm, lead_coords_mm, 'euclidean'))
-                can_eldist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / 3 # TODO what is (options.elspec.numel -1)?? change code after finding out!!
-
-            if rszfactor != 0:
-                stretch = can_dist * (rszfactor / can_eldist)
-            else:
-                stretch = can_dist
-
-            vec = np.divide((marker["markers_tail"] - marker["markers_head"]),
-                            np.linalg.norm(marker["markers_tail"] - marker["markers_head"]))
-            marker["markers_tail"] = marker["markers_head"] + vec * stretch
-
-        coords, traj_vector, trajectory, can_eldist = [[] for _ in range(4)]
-        if not marker["markers_head"].size==0:
-            M = np.stack((np.append(marker["markers_head"], 1), np.append(marker["markers_tail"], 1),
-                          np.append(marker["markers_x"], 1), np.append(marker["markers_y"], 1)))
-            E = np.stack((np.append(lead_positions["head_position"], 1), np.append(lead_positions["tail_position"], 1),
-                          np.append(lead_positions["x_position"], 1), np.append(lead_positions["y_position"], 1)))
-
-            X = np.linalg.lstsq(E, M, rcond=None)
-
-            coords_mm = np.concatenate([lead_coords_mm, np.ones(shape=(lead_coords_mm.shape[0],1))], axis=1)
-            coords = (coords_mm @ X[0]).T
-            coords = coords[0: 3,:].T
-
-            traj_vector = (marker["markers_tail"] - marker["markers_head"]) / \
-                          np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
-
-            trajectory = np.stack((marker["markers_head"] - traj_vector*5,
-                                   marker["markers_head"] + traj_vector*25))
-            trajectory = np.array((np.linspace(trajectory[0, 0], trajectory[1, 0], num=50),
-                                   np.linspace(trajectory[0, 1], trajectory[1, 1], num=50),
-                                   np.linspace(trajectory[0, 2], trajectory[1, 2], num=50))).T
-
-        return coords, trajectory, can_eldist, marker
-
-    # ====================    Modules related to the estimation of rotation   ====================
-    @staticmethod
-    def initialise_rotation(lead_model, marker):
-        """script iniitalising the estimation of rotation angles; necessary as at the beginning there is no
-        information available; This function is followed by estimate_rotation.py (see below)"""
-
-        if lead_model['manual_correction'] and not lead_model['rotation']:
-            vec_temp = marker['markers_y'] - marker['markers_head']
-            vec_temp[2] = 0
-            vec_temp = np.divide(vec_temp, np.linalg.norm(vec_temp))
-            initial_rotation = np.degrees(math.atan2(np.linalg.norm(np.cross([0,1,0], vec_temp)),
-                                                     np.dot([0,1,0], vec_temp)))
-            if marker['markers_y'][0] > marker['markers_head'][0]:
-                initial_rotation = - initial_rotation
-            rotation = initial_rotation
-        elif not lead_model['manual_correction'] and not lead_model['rotation']:
-            rotation = 0
-
-        return rotation
-
-    @staticmethod
-    def estimate_rotation(lead_models, marker):
-        """determination of rotation according to markers provided; follows steps in ea_mancor_updatescene of
-         Lead-DBS package (cf. https://github.com/ningfei/lead/blob/develop/ea_mancor_updatescene.m) """
-
-        rotation, normtrajvector = lead_models['rotation'], lead_models["normtraj_vector"]
-        # normtrajvector = lead_models["normtraj_vector"] # TODO remove if no error is dropped
-
-        yvec = np.zeros((3,1))
-        yvec[0] = -np.cos(0) * np.sin(np.deg2rad(rotation))
-        yvec[1] = (np.cos(0) * np.cos(np.deg2rad(rotation))) + (np.sin(0) * np.sin(np.deg2rad(rotation)) * np.sin(0))
-        yvec[2] = (-np.sin(0) * np.cos(np.deg2rad(rotation))) + (np.cos(0) * np.sin(np.deg2rad(rotation)) * np.sin(0))
-
-        xvec = np.cross(yvec.T, [0,0,1])
-        xvec = xvec - (np.dot(xvec, normtrajvector) / np.linalg.norm(normtrajvector)**2) * normtrajvector
-        xvec = np.divide(xvec, np.linalg.norm(xvec))
-        yvec = -np.cross(xvec, normtrajvector)
-
-        marker['markers_x'] = marker['markers_head'] + (xvec * lead_models['lead_diameter'] / 2)
-        marker['markers_y'] = marker['markers_head'] + (yvec * lead_models['lead_diameter'] / 2)
-
-        return xvec, yvec, rotation, marker
-
-
     def get_xyplanes(self, trajectory, lead_model, limits=[(-4,4),(-4,4),(-10,20)], sample_width=10,
                      direction=['sag', 'cor']):
-
+        # TODO: this was moved into the GetData class and MUST be removed
         hd_trajectories = self.interpolate_trajectory(trajectory, resolution=10) # TODO: rename traj to trajectory after assigning in function
 
         slices = {k: [] for k in direction}
@@ -334,10 +244,7 @@ class PlotRoutines:
             slices[plane] = list(range(limits[idx][0], limits[idx][1]+1, 1))
             imat[plane], fitvolume[plane] = self.resample_CTplanes(hd_trajectories, plane, lead_model, resolution=.35)
 
-            if plane is not 'sag':
-                span_vector = [sample_width, 0, 0]
-            else:
-                span_vector = [0, sample_width, 0]
+            span_vector = [sample_width, 0, 0] if plane != 'sag' else [0, sample_width, 0]
 
             idx = [0, -1]
             bounding_box_coords = []
@@ -367,7 +274,7 @@ class PlotRoutines:
         bounding_box_coords = []
         for k in range(2):
             bounding_box_coords.append(np.arange(start=marker_coordinates[k]-window_size,
-                                                     stop=marker_coordinates[k]+window_size, step=resolution))
+                                                 stop=marker_coordinates[k]+window_size, step=resolution))
         bounding_box_coords.append(np.repeat(marker_coordinates[-1], len(bounding_box_coords[1])))
         bounding_box = np.array(bounding_box_coords)
 
@@ -381,18 +288,19 @@ class PlotRoutines:
         return imat, bounding_box, fitvolume
 
     @staticmethod
-    def resample_CTplanes(hd_trajectories, direction, lead_model, resolution=.2, sample_width=10):
-        """This function resamples the intesities of the source imaging to a grid which is later used to visualise the
-        leads. ea_mancor_updatescene lines 264f."""
+    def resample_CTplanes(hd_trajectories, direction, lead_data, resolution=.2, sample_width=10, use_transformation_matrix=False):
+        """Function resampling intesities of the source imaging to a grid which is later used to visualise the
+        leads. [ea_mancor_updatescene lines 264f]"""
 
-        if type(direction) == list:
-            direction = ''.join(direction)
+        direction = ''.join(direction) if type(direction) == list else direction  # in case direction is entered as list
 
-        if lead_model['transformation_matrix'].shape[0] == 3:
-            lead_model['transformation_matrix'] = np.eye(4)*lead_model['transformation_matrix'][0,0]
-            lead_model['transformation_matrix'][-1,-1] = 1
-        transformation_matrix = lead_model['transformation_matrix']
-        transformation_matrix = np.eye(4)
+        if use_transformation_matrix:  #  not necessary as all data in cDBS stay within the LPS coordinate system
+            if lead_data['transformation_matrix'].shape[0] == 3:
+                lead_data['transformation_matrix'] = np.eye(4)*lead_data['transformation_matrix'][0,0]
+                lead_data['transformation_matrix'][-1,-1] = 1
+            transformation_matrix = lead_data['transformation_matrix']
+        else:
+            transformation_matrix = np.eye(4)
 
         xvec = np.arange(start=-sample_width, stop=sample_width+resolution, step=resolution)
         meanfitline = np.vstack((hd_trajectories.T, np.ones(shape=(1, hd_trajectories.T.shape[1])))) # needed for transformation
@@ -403,16 +311,15 @@ class PlotRoutines:
             fitvolume.append(np.tile(meanfitline[t,:], xvec.shape).reshape(xvec.shape[0], meanfitline.shape[1]).T)
         fitvolume_orig = np.stack(fitvolume)
 
-        if direction is 'cor':
+        if direction == 'cor':
             fitvolume_orig[0,:,:] += addvolume
-        elif direction is 'sag':
+        elif direction == 'sag':
             fitvolume_orig[1, :, :] += addvolume
-        elif direction is 'tra':
+        elif direction == 'tra':
             fitvolume_orig[2, :, :] += addvolume
 
         fitvolume = np.linalg.solve(transformation_matrix, np.reshape(fitvolume_orig, (4, -1), order='F'))
-        #fitvolume[[2, 1, 0, 3]] = fitvolume[[0, 1, 2, 3]] # necessary for sitk?!?
-        resampled_points = PlotRoutines.interpolate_CTintensities(lead_model, fitvolume)
+        resampled_points = PlotRoutines.interpolate_CTintensities(lead_data, fitvolume)
         imat = np.reshape(resampled_points, (meanfitline.shape[1], -1), order='F')
 
         return imat, fitvolume_orig
@@ -451,7 +358,7 @@ class PlotRoutines:
         default_output_pixel_value = 0.0
         output_pixel_type = sitk.sitkFloat32 if img.GetNumberOfComponentsPerPixel() == 1 else sitk.sitkVectorFloat32
         resampled_temp = sitk.Resample(img, interp_grid_img, sitk.DisplacementFieldTransform(displacement_img),
-                                         interpolator_enum, default_output_pixel_value, output_pixel_type)
+                                       interpolator_enum, default_output_pixel_value, output_pixel_type)
 
         resampled_points = [resampled_temp[x,0,0] for x in range(resampled_temp.GetWidth())]
         debug = False
@@ -463,30 +370,14 @@ class PlotRoutines:
 
     # ====================    General Helper Functions for manual correction   ====================
     @staticmethod
-    def get_default_lead(lead_model):
-        """obtains the default lead properties according to the model """
-        #TODO: create a new helperfunctions class and move this part there
-
-        if lead_model['model'] == 'Boston Vercise Directional': # load mat-file to proceed
-            mat_filename = 'boston_vercise_directed.mat'
-            lead_properties = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
-            default_positions = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
-            default_mm_coordinates = np.array(lead_properties['coords_mm'])
-        else:
-            Output.msg_box(text="Lead type not yet implemented.", title="Lead type not implemented")
-            return
-
-        return lead_properties, default_positions, default_mm_coordinates
-
-    @staticmethod
     def load_leadModel(inputdir, filename):
-        """Function aiming at loading the lead models saved in preprocLead.py from this toolbox"""
+        """Function loading results from [preprocLeadCT.py] which emulates the PaCER toolbox"""
 
         if not inputdir:
             Output.msg_box(text="No input folder provided, please double-check!", title="Missing input folder")
             return
         elif not os.path.isfile(filename):
-            Output.msg_box(text="Models for electrode not available, please run detection first!",
+            Output.msg_box(text="Models for electrode unavailable, please run detection first!",
                            title="Models not available")
             return
         else:
@@ -509,25 +400,7 @@ class PlotRoutines:
             pickle.dump(intensityProfiles, f)
             pickle.dump(skelSkalms, f)
 
-    def marker_update(self, marker_updated, lead_models):
-        """replaces values of lead_models with updated values """
-
-        for key_name, val in marker_updated.items():
-            lead_models[key_name] = val
-        return lead_models
-
-    @staticmethod
-    def lead_dist(coords, factor=3):
-        """calculate lead distances according to its coordinates"""
-
-        A = scipy.spatial.distance.cdist(coords, coords, 'euclidean')
-        lead_dist = np.sum(np.sum(np.tril(np.triu(A, 1), 1))) / factor
-
-        return lead_dist
-
-
     # ====================    Helper Functions fpr plotting Data   ====================
-
     @staticmethod
     def getbgsidecolor(side, xray=False):
         """ """
@@ -549,57 +422,138 @@ class GetData:
     def __init__(self, parent=PlotRoutines):
         self.parent = parent
 
-    def get_leadModelProperties(self, lead_model, resize=False):
-        """ reads and estimates all necessary markers and trajectories for the corresponding lead model """
-        print("\t... reading properties of the lead model and estimating rotation")
+    @staticmethod
+    def leadInformation_update(information2update, lead_data):
+        """replaces values of lead_models with updated values; information2update can be marker, rotation, etc."""
 
-        lead_properties, default_positions, default_coordinates = GetData.get_default_lead(lead_model) #all in [mm]
-        marker_unprocessed = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker')])
+        for key_name, val in information2update.items():
+            lead_data[key_name] = val
+        return lead_data
 
-        if not (lead_model['first_run'] and lead_model['manual_correction']):
-            resize=True #TODO There is no consequence resulting from this option
-            lead_model['first_run'] = False
+    # ===================================    Functions related with coordinates   ===================================
+    def resize_coordinates(self, lead_coords, lead_data):
+        """function which enables resizing cooridnates (e.g. 8 contacts to 4 contacts if needed; additional
+        functionality contains """
 
-        _, lead_model['trajectory'], _, marker_temp = \
-            self.resolve_coordinates(marker_unprocessed, default_coordinates, default_positions, lead_model['model'],
-                                         resize_bool=resize)
-        # lead_model['rotation'] = self.initialise_rotation(lead_model, marker_temp)
-        lead_model['rotation'] = GetData.initialise_rotation(lead_model, marker_temp)
-        xvec, yvec, lead_model['rotation'], marker_rotation = self.estimate_rotation(lead_model, marker_temp)
-        lead_model = self.marker_update(marker_rotation, lead_model)
+        if lead_data['model'] == 'Boston Vercise Directional' or 'St Jude 6172' or 'St Jude 6173':
+            coordinates = np.zeros((4, 3))
+            coordinates[0, :] = lead_coords[0, :]
+            coordinates[1, :] = np.mean(lead_coords[1: 4, :], axis=0)
+            coordinates[2, :] = np.mean(lead_coords[4: 7, :], axis=0)
+            coordinates[3, :] = lead_coords[7, :]
 
-        if xvec.size == 0 or yvec.size == 0:
-            xvec, yvec, lead_model['rotation'], marker_rotation = self.estimate_rotation(lead_model, marker_rotation)
-            lead_model = self.marker_update(marker_rotation, lead_model)
+            emp_dist = GetData.lead_dist(coords=coordinates)
+        else:
+            coordinates = lead_coords
+            emp_dist = GetData.lead_dist(coords=coordinates, factor=lead_data['numel'])
 
-        options2process = {'xvec': [1, 0, 0], 'yvec': [0, 1, 0]}
-        unrot = {k: [] for k in options2process.keys()}
-        for key in options2process:
-            vec_temp = np.cross(lead_model["normtraj_vector"], options2process[key])
-            unrot[key] = np.divide(vec_temp, np.linalg.norm(vec_temp))
-
-        marker = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker')])
-        coordinates, trajectory, _, _ = self.resolve_coordinates(marker, default_coordinates,
-                                                           default_positions, lead_model['model'], resize_bool=False) # ea_mancor_updatescene line 144
-        return marker, coordinates, trajectory, unrot, resize
+        return coordinates, emp_dist
 
     @staticmethod
-    def get_default_lead(lead_model):
-        """obtains the default lead properties according to the model """
-        #TODO: create a new helperfunctions class and move this part there
+    def lead_dist(coords, factor=3):
+        """calculate lead distances according to its coordinates"""
+        # TODO: remove lead_dist from before to avoid redundancy
 
-        if lead_model['model'] == 'Boston Vercise Directional': # load mat-file to proceed
+        spatial_distance = scipy.spatial.distance.cdist(coords, coords, 'euclidean')
+        emp_dist = np.sum(np.sum(np.tril(np.triu(spatial_distance, 1), 1))) / factor
+
+        return emp_dist
+
+    def resolve_coordinates(self, marker, lead_coords_mm, lead_positions, lead_data, resize_bool=False, rszfactor=0):
+        """emulates the function from Lead-DBS ea_resolvecoords; unlike in Lead DBS this is done one at a time cf.
+        https://github.com/netstim/leaddbs/blob/master/templates/electrode_models/ea_resolvecoords.m"""
+
+        if resize_bool:
+            can_dist = np.linalg.norm(lead_positions["head_position"] - lead_positions["tail_position"])
+            coords_temp, can_eldist = GetData.resize_coordinates(self, lead_coords_mm, lead_data)
+
+            stretch = can_dist * (rszfactor / can_eldist) if rszfactor != 0 else can_dist
+            vec = np.divide((marker["markers_tail"] - marker["markers_head"]),
+                            np.linalg.norm(marker["markers_tail"] - marker["markers_head"]))
+            marker["markers_tail"] = marker["markers_head"] + vec * stretch
+
+        coords, traj_vector, trajectory, can_eldist = [[] for _ in range(4)]
+        if not marker["markers_head"].size==0:
+            M = np.stack((np.append(marker["markers_head"], 1), np.append(marker["markers_tail"], 1),
+                          np.append(marker["markers_x"], 1), np.append(marker["markers_y"], 1)))
+            E = np.stack((np.append(lead_positions["head_position"], 1), np.append(lead_positions["tail_position"], 1),
+                          np.append(lead_positions["x_position"], 1), np.append(lead_positions["y_position"], 1)))
+            X = np.linalg.lstsq(E, M, rcond=None)
+
+            coords_mm = np.concatenate([lead_coords_mm, np.ones(shape=(lead_coords_mm.shape[0],1))], axis=1)
+            coords = (coords_mm @ X[0]).T
+            coords = coords[0: 3,:].T
+
+            traj_vector = (marker["markers_tail"] - marker["markers_head"]) / \
+                          np.linalg.norm(marker["markers_tail"] - marker["markers_head"])
+
+            trajectory = np.stack((marker["markers_head"] - traj_vector*5, marker["markers_head"] + traj_vector*25))
+            trajectory = np.array((np.linspace(trajectory[0, 0], trajectory[1, 0], num=50),
+                                   np.linspace(trajectory[0, 1], trajectory[1, 1], num=50),
+                                   np.linspace(trajectory[0, 2], trajectory[1, 2], num=50))).T
+
+        return coords, trajectory, can_eldist, marker
+
+    # ===================================    Functions in combination with leads   ===================================
+    @staticmethod
+    def get_default_lead(lead_data):
+        """obtains default lead properties according to the model proposed in the PaCER algorithm @ ./template"""
+
+        if lead_data['model'] == 'Boston Vercise Directional': # load mat-file to proceed
             mat_filename = 'boston_vercise_directed.mat'
-            lead_properties = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
-            default_positions = {x: np.hstack(vals) for x, vals in lead_properties.items() if x.endswith('position')}
-            default_mm_coordinates = np.array(lead_properties['coords_mm'])
+            lead_model = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
+            default_positions = {x: np.hstack(vals) for x, vals in lead_model.items() if x.endswith('position')}
+            default_coordinates = np.array(lead_model['coords_mm'])  # in [mm]
         else:
             Output.msg_box(text="Lead type not yet implemented.", title="Lead type not implemented")
             return
 
-        return lead_properties, default_positions, default_mm_coordinates
+        return lead_model, default_positions, default_coordinates
 
-    # ====================    Modules related to the estimation of rotation   ====================
+    def get_leadModel(self, lead_data, default_positions, default_coordinates, side, resize=False):
+        """ reads and estimates all necessary markers and trajectories for the corresponding lead model """
+        print("\t... reading lead data properties for {} side and estimating rotation".format(side))
+
+        marker_unprocessed = dict([(k, r) for k, r in lead_data.items() if k.startswith('marker')])
+
+        if not (lead_data['first_run'] and lead_data['manual_correction']):
+            resize = True  # TODO: Not sure if this is doing the job; some warning/information should be displayed that > first run
+            lead_data['first_run'] = False
+
+        _, lead_data['trajectory'], _, marker_temp = \
+            GetData.resolve_coordinates(self, marker_unprocessed, default_coordinates, default_positions, lead_data,
+                                        resize_bool=resize)
+
+        lead_data['rotation'] = GetData.initialise_rotation(lead_data, marker_temp)
+        xvec, yvec, lead_data['rotation'], marker_rotation = GetData.estimate_rotation(lead_data, marker_temp)
+        lead_data = GetData.leadInformation_update(marker_rotation, lead_data)
+
+        if xvec.size == 0 or yvec.size == 0:
+            xvec, yvec, lead_data['rotation'], marker_rotation = GetData.estimate_rotation(lead_data, marker_rotation)
+            lead_data = GetData.leadInformation_update(marker_rotation, lead_data)
+
+        options2process = {'xvec': [1, 0, 0], 'yvec': [0, 1, 0]}
+        unrot = {k: [] for k in options2process.keys()}
+        for key in options2process:
+            vec_temp = np.cross(lead_data["normtraj_vector"], options2process[key])
+            unrot[key] = np.divide(vec_temp, np.linalg.norm(vec_temp))
+
+        marker = dict([(k, r) for k, r in lead_data.items() if k.startswith('marker')])
+        coordinates, trajectory, _, _ = GetData.resolve_coordinates(self, marker, default_coordinates,
+                                                                    default_positions, lead_data, resize_bool=False)  # ea_mancor_updatescene line 144
+        return marker, coordinates, trajectory, resize
+
+    def multiprocessing_xyplanes(self, lead_model, trajectory, dimension=['sag', 'cor']):
+        """extracts the intensities corresponding to the CTimaging, which is used as 'background' in the figure"""
+
+        print("\t...extracting intensities for corresponding CTimaging\t...", end='')
+        intensity_matrix, bounding_box, fitvolume = self.get_xyplanes(trajectory=trajectory, lead_model=lead_model,
+                                                                      direction=dimension)
+        print("Done!", flush=True)
+
+        return intensity_matrix, bounding_box, fitvolume
+
+    # ==============================    Functions related to estimation of rotation   ==============================
     @staticmethod
     def initialise_rotation(lead_model, marker):
         """script iniitalising the estimation of rotation angles; necessary as at the beginning there is no
@@ -625,7 +579,6 @@ class GetData:
          Lead-DBS package (cf. https://github.com/ningfei/lead/blob/develop/ea_mancor_updatescene.m) """
 
         rotation, normtrajvector = lead_models['rotation'], lead_models["normtraj_vector"]
-        # normtrajvector = lead_models["normtraj_vector"] # TODO remove if no error is dropped
 
         yvec = np.zeros((3,1))
         yvec[0] = -np.cos(0) * np.sin(np.deg2rad(rotation))
