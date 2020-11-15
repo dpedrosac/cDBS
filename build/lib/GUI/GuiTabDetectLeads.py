@@ -9,7 +9,7 @@ import utils.HelperFunctions as HF
 from GUI.GuiTwoLists_generic import TwoListGUI
 from utils.settingsLeadDetection import GuiLeadDetection
 import utils.preprocLeadCT as LeadDetectionRoutines
-import utils.elecModel_manualcorrection as plotElecModel
+import tests.elecModel_manualcorrection as plotElecModel
 import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
 

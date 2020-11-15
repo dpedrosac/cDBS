@@ -8,7 +8,8 @@ from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayou
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
 import private.allToolTips as setToolTips
-import utils.elecModel_manualcorrection as plotElecModel
+# import utils.elecModel_manualcorrection as plotElecModel # old version
+import utils.leadManualCorrection as plotElecModel
 import utils.preprocLeadCT as LeadDetectionRoutines
 from utils.HelperFunctions import Output, Configuration, FileOperations
 from GUI.GuiTwoLists_generic import TwoListGUI

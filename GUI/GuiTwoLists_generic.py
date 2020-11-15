@@ -5,6 +5,7 @@ import os
 import sys
 
 import utils.HelperFunctions as HF
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging
 from utils.settingsDCM2NII import GuiSettingsDCM2NII
 from utils import preprocDCM2NII
 import private.allToolTips as setToolTips
@@ -36,7 +37,7 @@ class ContentTwoListGUI(QWidget):
 
     def __init__(self, working_directory, _option_gui, parent=None):
         super(QWidget, self).__init__(parent)
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = Configuration.load_config(ROOTDIR)
         self.option_gui = _option_gui
 
         # ============================    Different options available   ============================
@@ -52,7 +53,7 @@ class ContentTwoListGUI(QWidget):
 
         elif self.option_gui == "displayNiftiFiles":
             if not working_directory:
-                HF.msg_box(text='Please provide a valid folder. Terminating this GUI.', title='No folder provided')
+                Output.msg_box(text='Please provide a valid folder. Terminating this GUI.', title='No folder provided')
                 self.close()
                 return
             else:
@@ -61,7 +62,7 @@ class ContentTwoListGUI(QWidget):
                        'str_labelDir':'subjects\' DIR: {}'.format(self.working_dir),
                        'runBTN_label': 'View files'}
         else:
-            HF.msg_box(text='Please provide a valid option such as "dcm2niix" or "displayNiftiFiles". '
+            Output.msg_box(text='Please provide a valid option such as "dcm2niix" or "displayNiftiFiles". '
                                           'Terminating the GUI', title='Wrong input as option')
             self.close()
             return
@@ -88,7 +89,7 @@ class ContentTwoListGUI(QWidget):
         self.btn_savedir.setDisabled(True)
         if self.option_gui == "dcm2niix":
             self.btn_savedir.setEnabled(True)
-            self.btn_savedir.setToolTip(HF.LittleHelpers.split_lines(setToolTips.saveDirButton()))
+            self.btn_savedir.setToolTip(Output.split_lines(setToolTips.saveDirButton()))
         self.btn_savedir.clicked.connect(self.save_cfg_dicomdir)
 
         hlay_upper = QHBoxLayout()
@@ -165,9 +166,9 @@ class ContentTwoListGUI(QWidget):
         try:
             self.mInput.clear()
             if self.option_gui == 'dcm2niix':
-                items = HF.list_folders(self.working_dir, prefix='')
+                items = FileOperations.list_folders(self.working_dir, prefix='')
             else:
-                items = HF.list_files_in_folder(inputdir=self.working_dir, contains='', suffix='nii')
+                items = FileOperations.list_files_in_folder(inputdir=self.working_dir, contains='', suffix='nii')
             self.addAvailableItems(items)
         except FileExistsError:
             print('{} without any valid files/folders, continuing ...'.format(self.working_dir))
@@ -198,17 +199,17 @@ class ContentTwoListGUI(QWidget):
         self.label_workingdir.setText('Working DIR: {}'.format(self.working_dir))
         self.mInput.clear()
 
-        items = HF.list_folders(self.working_dir, prefix='')
+        items = FileOperations.list_folders(self.working_dir, prefix='')
         self.addAvailableItems(items)
         if self.option_gui == "dcm2niix":
             self.cfg["folders"]["dicom"] = self.working_dir
-            HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
+            Configuration.save_config(self.cfg["folders"]["rootdir"], self.cfg)
 
     def save_cfg_dicomdir(self):
         """Function intended to save the DICOM directory once button is pressed"""
         self.cfg["folders"]["dicom"] = self.working_dir
-        HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-        HF.LittleHelpers.msg_box(text="Folder changed in the configuration file to {}".format(self.working_dir),
+        Configuration.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
+        Configuration.LittleHelpers.msg_box(text="Folder changed in the configuration file to {}".format(self.working_dir),
                                  title='Changed folder')
 
     def settings_show(self):
@@ -224,7 +225,7 @@ class ContentTwoListGUI(QWidget):
         [input.append(self.mOutput.item(x).text()) for x in range(self.mOutput.count())]
 
         if not input:
-            HF.LittleHelpers.msg_box(text="At least one folder with data must be selected!",
+            OUtput.msg_box(text="At least one folder with data must be selected!",
                                      title='No directory selected')
         elif len(input) != 0 and self.option_gui == "dcm2niix":
             print('in total, {} folders were selected'.format(len(input)))
@@ -234,7 +235,7 @@ class ContentTwoListGUI(QWidget):
             [input_with_path.extend(glob.glob(self.working_dir + '/**/' + x, recursive=True)) for x in input]
 
             viewer = 'itk-snap'  # to-date, only one viewer is available. May be changed in a future
-            HF.LittleHelpers.load_imageviewer(viewer, input_with_path)
+            Imaging.load_imageviewer(viewer, input_with_path)
 
     @QtCore.pyqtSlot()
     def update_buttons_status(self):

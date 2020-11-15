@@ -13,6 +13,16 @@ from mat4py import loadmat
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+import time
+import multiprocessing as mp
+
+import plotly.offline as py
+import plotly.graph_objs as go
+from matplotlib import cm
+
 from dependencies import ROOTDIR
 from utils.HelperFunctions import Output, Configuration
 
@@ -23,35 +33,99 @@ class PlotRoutines: #  656 lines so far
     def __init__(self, subject, inputfolder=''):
         self.cfg = Configuration.load_config(ROOTDIR)
         self.debug=False
+        GetData()
         # TODO: new order with a) get 'static data' such as background, trajectory, lead_model, b) plot all results.
         # TODO: c) include some variable data (markers, rotation) and add some callback functions in form of arrows
 
         # Get static data, that is lead data, backgrounds and trajectories
         filename_leadmodel = os.path.join(inputfolder, 'elecModels_' + subject + '.pkl')
-        lead_data, intensityProfiles, skelSkalms = self.load_leadModel(inputfolder, filename=filename_leadmodel)
-        sides = self.estimate_sides(lead_data) # determines which side is used in lead_data
-        lead_model, default_positions, default_coordinates = GetData.get_default_lead(lead_data[0])  # all in [mm]
+        lead_data_raw, intensityProfiles, skelSkalms = self.load_leadModel(inputfolder, filename=filename_leadmodel)
+        lead_data, sides = self.estimate_hemisphere(lead_data_raw) # determines which side is used in lead_data
+        lead_model, default_positions, default_coordinates = GetData.get_default_lead(lead_data_raw[0])  # all in [mm]
 
         # Get initial data for both leads
-        marker, coordinates, trajectory, resize = [{} for _ in range(4)]
-        for idx, hemisphere in enumerate(sides):
+        marker, coordinates, trajectory, resize, emp_dist = [{} for _ in range(5)]
+        for hemisphere in sides:
             marker[hemisphere], coordinates[hemisphere], trajectory[hemisphere], resize[hemisphere] = \
-                GetData.get_leadModel(self, lead_data[idx], default_positions, default_coordinates, side=hemisphere)
+                GetData.get_leadModel(self, lead_data[hemisphere], default_positions, default_coordinates, side=hemisphere)
+            _, emp_dist[hemisphere] = GetData.resize_coordinates(self, coordinates[hemisphere], lead_data[hemisphere])
+            _, lead_data[hemisphere]['trajectory'], _, marker_temp = \
+                GetData.resolve_coordinates(self, marker[hemisphere], default_coordinates, default_positions,
+                                            lead_data[hemisphere], resize_bool=resize[hemisphere],
+                                            rszfactor=emp_dist[hemisphere]) # This part doesn't do anything meaningful!
 
         # Get data for xy-plane estimation/plot
+        intensity_matrix, bounding_box, fitvolume = GetData.multiprocessing_xyplanes(self, lead_data, trajectory)
 
-        self.interactive_plot(lead_data[1], intensityProfiles, skelSkalms)
+        # Start plotting the 'fixed parts', that is lead model (left) and CT intensitiy planes (middle)
+        # fig, grid = self.create_figure()
+        # fig, layout = self.create_figure_plotly()
+        layout = self.create_figure_plotly()
+        data = []
+        data = self.plotCTintensitiesPlotLy(intensity_matrix['left'], fitvolume['left'], data)
+
+        fig = go.Figure(
+            data=data,
+            layout=layout)
+        fig.show()
+        # https://community.plotly.com/t/moving-the-location-of-a-graph-point-interactively/7161/2 # TODO Next steps
+        # CTintensitiesLeft = fig.add_subplot(grid[0:3,0], facecolor='None', projection='3d')
+        # CTintensitiesLeft = self.plotCTintensitiesNEW(CTintensitiesLeft, intensity_matrix['left'],
+        #                                              bounding_box['left'], fitvolume['left'], trajectory['left'])
+
+        # CTintensitiesRight = fig.add_subplot(grid[0:,2:3], facecolor='None', projection='3d')
+
+        self.interactive_plot(lead_data['right'], intensityProfiles, skelSkalms)
 
     @staticmethod
-    def estimate_sides(lead_data):
+    def estimate_hemisphere(lead_data):
         """estimates the available sides and returns a list of all available leads; as all data is in LPS (Left,
         Posterior, Superior) so that side can be deduced from trajectory"""
 
         sides = []
+        renamed_lead_data = dict()
         for info in lead_data:
-            sides.append('right') if not info['trajectory'][0, 0] > info['trajectory'][-1, 0] else sides.append('left')
+            side_temp = 'right' if not info['trajectory'][0, 0] > info['trajectory'][-1, 0] else 'left'
+            renamed_lead_data[side_temp] = info
+            sides.append(side_temp)
+        return renamed_lead_data, sides
 
-        return sides
+    def create_figure(self, num_cols=2, num_rows=2):
+        """creates a figure which is filled with content in later steps"""
+        fig = plt.figure(facecolor=np.append(np.array([.64] * 3), .25), frameon=False)
+        col_width = [5, 1]
+        row_height = [5, 1]
+        grid = gridspec.GridSpec(ncols=int(num_cols), nrows=int(num_rows), figure=fig, width_ratios=col_width,
+                                 height_ratios=row_height, hspace=0.08, wspace=0.1)
+        return fig, grid
+
+    def create_figure_plotly(self, num_cols=3, num_rows=1):
+        """creates a figure which is filled with content in later steps"""
+        #fig = make_subplots(
+        #    rows=num_rows, cols=num_cols,
+        #    column_widths=[0.6, 0.4],
+        #    row_heights=[0.4, 0.6],
+        #    specs=[[{'is_3d': True}, {'is_3d': True}, {'is_3d': False}]],
+        #    subplot_titles=['model', 'data', 'xplane'])
+
+        axis = dict(showbackground=True,
+                    backgroundcolor="rgb(230, 230,230)",
+                    gridcolor="rgb(255, 255, 255)",
+                    zerolinecolor="rgb(255, 255, 255)",
+                    )
+
+        layout = go.Layout(
+            width=700,
+            height=700,
+            # scene=go.layout.Scene(xaxis=go.layout.XAxis(axis),
+            #               yaxis=go.layout.YAxis(axis),
+            #               zaxis=go.layout.ZAxis(axis, range=[-2, 2]),
+            #               aspectratio=dict(x=1, y=1, z=1),
+            #               ),
+        )
+
+#        return fig, layout
+        return layout
 
     def interactive_plot(self, lead_data, intensityProfiles, skelSkalms):
         """ Start plotting routine according to Lead-DBS implementation [ea_autocoord and ea_manualreconstruction]"""
@@ -59,8 +133,8 @@ class PlotRoutines: #  656 lines so far
         lead_model, default_positions, default_coordinates = GetData.get_default_lead(lead_data)  # all in [mm]
 
         # Get estimated positions, coordinates, rotation information and markers for leads
-        marker, coordinates, trajectory, unrot, resize = GetData.get_leadModel(self, lead_data, default_positions,
-                                                                               default_coordinates)
+        marker, coordinates, trajectory, resize = GetData.get_leadModel(self, lead_data, default_positions,
+                                                                        default_coordinates, 'right')
 
         #TODO: elecModels should be updated somehow
 
@@ -73,13 +147,16 @@ class PlotRoutines: #  656 lines so far
         lead_data = GetData.leadInformation_update(marker_temp, lead_data) # TODO doesn't make sense as markers donÄt change at this point
 
         # Start plotting
-        fig = plt.figure(facecolor=self.getbgsidecolor(side=0)) # TODO: is it really the side, what is this color actually
-        fig.tight_layout()
-        width = [1, 2, 2, 1]
-        height = [1, 1, 1]
-        grid = gridspec.GridSpec(ncols=4, nrows=3, figure=fig, width_ratios=width, height_ratios=height)
+        # fig = plt.figure(facecolor=self.getbgsidecolor(side=0), tight_layout=True) # TODO: is it really the side, what is this color actually
+        fig = plt.figure(facecolor=np.append(np.array([.64] * 3), .25), tight_layout=True)  # TODO: is it really the side, what is this color actually
 
-        grid_indices = [(0,5), (1,3)]
+        #fig.set_tight_layout(True)
+        width = [1, 10, 10, 1]
+        height = [1, 25, 1]
+        grid = gridspec.GridSpec(ncols=4, nrows=3, figure=fig, width_ratios=width, height_ratios=height,
+                                 hspace=0.08, wspace=0.1)
+
+        grid_indices = [(0,-1), (0,-1)]
         self.plotCTintensities(lead_data, coordinates, trajectory, fig, grid, grid_indices)
 
         grid_indices = [(-1), (-1)]
@@ -88,61 +165,66 @@ class PlotRoutines: #  656 lines so far
         self.plotCTaxial(lead_data, fig, grid, cmap='gist_gray')
         self.plot_leadModel(lead_model, fig, grid)
 
-    def plotCTintensities(self, lead_model, coordinates, trajectory, fig, grid, grid_indices, dimension=['sag', 'cor']):
+    @staticmethod
+    def get_the_slice(x, y, z, surfacecolor, colorscale='gray', showscale=False):
+        return go.Surface(x=x,  # https://plot.ly/python/reference/#surface
+                          y=y,
+                          z=z,
+                          surfacecolor=surfacecolor,
+                          colorscale=colorscale,
+                          showscale=showscale,
+                          name="")
+
+
+    def plotCTintensitiesPlotLy(self, intensity_matrix, fitvolume, data):
         """function plotting perpendicular images of the intensities obtained from trajectory coordinates; separate
         function needed here as changes occur in trejectories/markers"""
 
-        # TODO: is moved in the GetData part so that data is available for both leads (if available); this should speed things up
-        print("\t...extracting intensities for corresponding CTimaging\t...", end='')
-        intensity_matrix, bounding_box, fitvolume = self.get_xyplanes(trajectory=trajectory, lead_model=lead_model,
-                                                                      direction=dimension)
-        print("Done!", flush=True)
-        # Prepare plot
-        mainax1 = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
-                                  grid_indices[1][0]:grid_indices[1][1]], facecolor='None', projection='3d')
-        fig.tight_layout()
-        mainax1.set_axis_off()
-        mainax1.set_facecolor('None')
+        for idx, (direction, intensity) in enumerate(intensity_matrix.items()):
+            matrix2plot = (intensity - np.min(intensity)) / (np.max(intensity) - np.min(intensity))  # Prepare data!
+            X, Y, Z = fitvolume[direction][0, :, :], fitvolume[direction][1, :, :], fitvolume[direction][2, :, :]
+            slice_temp = self.get_the_slice(X,Y,Z, matrix2plot)
+            data.append(slice_temp)
 
-        face = {x: [] for x in intensity_matrix.keys()}
-        for orientation, intensity in intensity_matrix.items():
-            matrix2plot = (intensity - np.min(intensity)) / (np.max(intensity) - np.min(intensity)) # Prepare data!
-            fcolors = GetData.color_plotsurface(matrix2plot, cmap='gist_gray', alpha=.2)
-            X, Y, Z = fitvolume[orientation][0, :, :], fitvolume[orientation][1, :, :], fitvolume[orientation][2, :, :]
-            face[orientation] = mainax1.plot_surface(X, Y, Z, rstride=1, cstride=1, shade=False, facecolors=fcolors,
-                                                     alpha=.1,antialiased=True).set_facecolor((0, 0, 1, .3))
-            mainax1.view_init(elev=0, azim=180)
-            mainax1.autoscale(tight=True)
+        return data
 
-            print(orientation)
-        mainax1.view_init(elev=0, azim=180)
-        grid.tight_layout(fig)
-        plt.draw()
-
-        traj_interp = np.linspace(start=trajectory[0, :], stop=trajectory[-1, :], num=500)
-        mainax1.plot([traj_interp[0,0], traj_interp[-1,0]], [traj_interp[0,1], traj_interp[-1,1]],
-                     zs=[traj_interp[0,2], traj_interp[-1,2]], color='magenta')
-
-        for c in coordinates:
-            self.plot_coordinates(c, mainax1, marker='p', s=250)
+        # TODO this part goes somewhere else as it is the dynamic part to be changed by using arrows
+        # for c in coordinates:
+        #     self.plot_coordinates(c, mainax1, marker='p', s=250)
 
         # Start plotting the markers for the 'head' and 'tail' of the lead
-        marker_plot = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker')])
-        self.plot_coordinates(marker_plot["markers_head"], mainax1, marker='o', facecolor='g', edgecolor='g',
-                              linewidth=1.5)
-        self.plot_coordinates(marker_plot["markers_tail"], mainax1, marker='o', facecolor='r', edgecolor='r',
-                              linewidth=1.5)
-        mainax1.set_zlim(np.multiply(mainax1.get_zlim(),[1, .98]))
+        # marker_plot = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker')])
+        # self.plot_coordinates(marker_plot["markers_head"], mainax1, marker='o', facecolor='g', edgecolor='g',
+        #                      linewidth=1.5)
+        # self.plot_coordinates(marker_plot["markers_tail"], mainax1, marker='o', facecolor='r', edgecolor='r',
+        #                      linewidth=1.5)
+        # mainax1.set_zlim(np.multiply(mainax1.get_zlim(), [1, .98]))
 
     @staticmethod
-    def plot_coordinates(coordinates, axis, marker='', s=25, facecolor='k', linewidth=1.5,edgecolor=[.9]*3):
+    def color_plotsurface(imat2plot, cmap='gist_gray', alpha=1):
+        """defines a colormap which is used for plotting data later """
+        import matplotlib.cm as cm
+        from matplotlib import colors as colors
+
+        color_dimension = imat2plot  # change to desired fourth dimension
+        minn, maxx = color_dimension.min(), color_dimension.max()
+        norm = matplotlib.colors.Normalize(minn, maxx)
+        m = cm.ScalarMappable(norm=norm, cmap=cmap)
+        m.set_array([])
+        fcolors = m.to_rgba(color_dimension)
+        fcolors[:,:,-1] = np.ones((fcolors[:,:,-1].shape))*alpha
+
+        return fcolors
+
+    @staticmethod
+    def plot_coordinates(coordinates, axis, marker='', s=25, facecolor='k', linewidth=1.5, edgecolor=[.9]*3):
         """plots all coordinates of the electrodes estimated from the lead model"""
 
         axis.scatter(coordinates[0], coordinates[1], coordinates[2], s=s, c=facecolor, edgecolor=edgecolor,
                      marker=marker, linewidth=linewidth)
 
     @staticmethod
-    def plot_leadInformation(lead_model, mean_empdist, fig, grid, grid_indices):
+    def plot_leadInformation(lead_data, mean_empdist, fig, grid, grid_indices):
         """plots lead information in the lower right corner"""
 
         axis = fig.add_subplot(grid[grid_indices[0], grid_indices[1]], facecolor='None')
@@ -150,24 +232,24 @@ class PlotRoutines: #  656 lines so far
         axis.set_axis_off()
         axis.set_facecolor('None')
 
-        stn_direction = 'right' if not lead_model['trajectory'][0, 0] > lead_model['trajectory'][-1, 0] else 'left'
+        stn_direction = 'right' if not lead_data['trajectory'][0, 0] > lead_data['trajectory'][-1, 0] else 'left'
         text2plot = 'Lead: {} STN \nLead spacing: {:.2f} mm\nRotation:  {} ' \
-                    'deg'.format(stn_direction, mean_empdist, lead_model['rotation'])
+                    'deg'.format(stn_direction, mean_empdist, lead_data['rotation'])
         axis.text(.6, .25, text2plot, horizontalalignment='center',fontsize=12, ha='center', va='center',
                   bbox=dict(boxstyle='circle', facecolor='#D8D8D8', ec="0.5", pad=0.5, alpha=1), fontweight='bold')
 
-    def plotCTaxial(self, lead_model, fig, grid, cmap='gist_gray'):
+    def plotCTaxial(self, lead_data, fig, grid, cmap='gist_gray'):
         """function plotting axial sclices at the level of head and tail markers"""
 
         print("\t...extracting axial slices for corresponding markers of CTimaging\t...")
         marker_of_interest = ['markers_head', 'markers_tail']
-        marker_plot = dict([(k, r) for k, r in lead_model.items() if k.startswith('marker') and
+        marker_plot = dict([(k, r) for k, r in lead_data.items() if k.startswith('marker') and
                             any(z in k for z in marker_of_interest)])
         color_specs = ['g', 'r']
         item = -1
         for marker, coordinates in marker_plot.items():
             item += 1
-            intensity_matrix, bounding_box, _ = self.get_axialplanes(coordinates, lead_model=lead_model,
+            intensity_matrix, bounding_box, _ = self.get_axialplanes(coordinates, lead_data=lead_data,
                                                                      window_size=15, resolution=.5)
             transversal_axis = fig.add_subplot(grid[item, -1], facecolor='None')
             transversal_axis.imshow(intensity_matrix, cmap=cmap, extent=[np.min(bounding_box, axis=1)[0],
@@ -184,51 +266,47 @@ class PlotRoutines: #  656 lines so far
         grid.tight_layout(fig)
 
     @staticmethod
-    def plot_leadModel(lead_properties, fig, grid, grid_indices=[(0, -1), (0)],
-                       colors=[.3, .5], items_of_interest=['insulation', 'contacts']):
+    def plot_leadModel(lead_model, fig, grid, lead_data, colors=[.3, .5], items2plot=['insulation', 'contacts']):
         """Plots schematic lead model at the left side in order to visualise what it should look like """
 
-        lead_model_plot = fig.add_subplot(grid[grid_indices[0][0]:grid_indices[0][1],
-                                          grid_indices[1]], facecolor='None', projection='3d')
-        lead_plot = dict([(k, r) for k, r in lead_properties.items() if any(z in k for z in items_of_interest)])
+        leadModelSubplot = fig.add_subplot(grid[0:, 0], facecolor='None', projection='3d')
+        lead_plot = dict([(k, r) for k, r in lead_model.items() if any(z in k for z in items2plot)])
         max_coords, min_coords = [[] for _ in range(2)]
 
-        for idx, item in enumerate(items_of_interest):
+        for idx, item in enumerate(items2plot):
             for idx_vertices in (range(0, len(lead_plot[item]['vertices']))):
                 verts_temp = np.array(lead_plot[item]['vertices'][idx_vertices]) - 1
                 faces_temp = np.array(lead_plot[item]['faces'][idx_vertices]) - 1
                 mesh = Poly3DCollection(verts_temp[faces_temp], facecolors=[colors[idx]] * 3, edgecolor='none',
                                         rasterized=True)
-                lead_model_plot.add_collection(mesh)
+                leadModelSubplot.add_collection(mesh)
 
                 if item == 'contacts':
                     max_coords.append(np.max(verts_temp[faces_temp], axis=1))
                     min_coords.append(np.min(verts_temp[faces_temp], axis=1))
 
-        lead_type = 'boston'
-        marker_position = ['head', 'tail']
-        marker = {k: [] for k in marker_position}
-        if lead_type == 'boston':
+        marker = {k: [] for k in ['head', 'tail']}
+        if lead_data['left']['model'] == 'Boston Vercise Directional':
             for n in range(3):
-                marker['tail'].append(lead_properties['tail_position'][n])
-                marker['head'].append(lead_properties['tail_position'][n])
+                marker['tail'].append(lead_model['tail_position'][n])
+                marker['head'].append(lead_model['tail_position'][n])
             marker['tail'][2] = np.min(min_coords[0])
         else:
             for n in range(3):
-                marker['tail'].append(lead_properties['tail_position'][n])
-                marker['head'].append(lead_properties['head_position'][n])
+                marker['tail'].append(lead_model['tail_position'][n])
+                marker['head'].append(lead_model['head_position'][n])
 
         color = ['r', 'g']
-        for idx, loc in enumerate(marker_position):
-            lead_model_plot.scatter(marker[loc][0] - 1, marker[loc][1] - 2, marker[loc][2],c=color[idx], s=25)
+        for idx, loc in enumerate(['head', 'tail']):
+            leadModelSubplot.scatter(marker[loc][0] - 1, marker[loc][1] - 2, marker[loc][2],c=color[idx], s=25)
 
-        lead_model_plot.set_zlim([0, 15])
-        lead_model_plot.set_ylim(-4, 4)
-        lead_model_plot.set_xlim(-4, 4)
-        lead_model_plot.set_facecolor('None')
-        lead_model_plot.view_init(elev=0, azim=-120)
-        lead_model_plot.set_axis_off()
-        grid.tight_layout(fig)
+        leadModelSubplot.set_zlim([0, 15])
+        leadModelSubplot.set_ylim(-4, 4)
+        leadModelSubplot.set_xlim(-4, 4)
+        leadModelSubplot.set_facecolor('None')
+        leadModelSubplot.view_init(elev=0, azim=-120)
+        leadModelSubplot.set_axis_off()
+        # grid.tight_layout(fig) # TODO is this necessary?
 
     def get_xyplanes(self, trajectory, lead_model, limits=[(-4,4),(-4,4),(-10,20)], sample_width=10,
                      direction=['sag', 'cor']):
@@ -262,13 +340,13 @@ class PlotRoutines: #  656 lines so far
 
         return imat, bounding_box, fitvolume
 
-    def get_axialplanes(self, marker_coordinates, lead_model, window_size=15, resolution=.5):
+    def get_axialplanes(self, marker_coordinates, lead_data, window_size=15, resolution=.5):
         """returns a plane at a specific window with a certain direction"""
 
-        if lead_model['transformation_matrix'].shape[0] == 3:
-            lead_model['transformation_matrix'] = np.eye(4)*lead_model['transformation_matrix'][0,0]
-            lead_model['transformation_matrix'][-1,-1] = 1
-        transformation_matrix = lead_model['transformation_matrix']
+        if lead_data['transformation_matrix'].shape[0] == 3:
+            lead_data['transformation_matrix'] = np.eye(4)*lead_data['transformation_matrix'][0,0]
+            lead_data['transformation_matrix'][-1,-1] = 1
+        transformation_matrix = lead_data['transformation_matrix']
         transformation_matrix = np.eye(4)
 
         bounding_box_coords = []
@@ -282,7 +360,7 @@ class PlotRoutines: #  656 lines so far
         meshZ = np.repeat(bounding_box[-1,0], len(meshX.flatten()))
         fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
         fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
-        resampled_points = PlotRoutines.interpolate_CTintensities(lead_model, fitvolume)
+        resampled_points = PlotRoutines.interpolate_CTintensities(lead_data, fitvolume)
         imat = np.reshape(resampled_points, (meshX.shape[0], -1), order='F')
 
         return imat, bounding_box, fitvolume
@@ -452,7 +530,6 @@ class GetData:
     @staticmethod
     def lead_dist(coords, factor=3):
         """calculate lead distances according to its coordinates"""
-        # TODO: remove lead_dist from before to avoid redundancy
 
         spatial_distance = scipy.spatial.distance.cdist(coords, coords, 'euclidean')
         emp_dist = np.sum(np.sum(np.tril(np.triu(spatial_distance, 1), 1))) / factor
@@ -543,15 +620,99 @@ class GetData:
                                                                     default_positions, lead_data, resize_bool=False)  # ea_mancor_updatescene line 144
         return marker, coordinates, trajectory, resize
 
-    def multiprocessing_xyplanes(self, lead_model, trajectory, dimension=['sag', 'cor']):
+    def worker_xy_planes(self, traj, lead, dimension, side, IM_dict, BB_dict, FV_dict, queue):
+        print("\t...extracting intensities for CTimages @ {} side\t...".format(side))
+        queue.put('.')
+        intensity_matrix, bounding_box, fitvolume = GetData.get_xyplanes(self, trajectory=traj, lead_model=lead,
+                                                                         direction=dimension)
+        IM_dict[side] = intensity_matrix
+        BB_dict[side] = bounding_box
+        FV_dict[side] = fitvolume
+
+    def multiprocessing_xyplanes(self, lead_data, trajectory, dimension=['sag', 'cor']):
         """extracts the intensities corresponding to the CTimaging, which is used as 'background' in the figure"""
 
-        print("\t...extracting intensities for corresponding CTimaging\t...", end='')
-        intensity_matrix, bounding_box, fitvolume = self.get_xyplanes(trajectory=trajectory, lead_model=lead_model,
-                                                                      direction=dimension)
-        print("Done!", flush=True)
+        queue = mp.Queue()
+        start_multi = time.time()
+        manager = mp.Manager()
+        IM_dict, BB_dict, FV_dict = manager.dict(), manager.dict(), manager.dict()
+        processes = [mp.Process(target=GetData.worker_xy_planes,
+                                args=(self, trajectory[side], lead_data[side], dimension, side,
+                                      IM_dict, BB_dict, FV_dict, queue))
+                     for side in trajectory.keys()]
+        _ = [p.start() for p in processes]
 
-        return intensity_matrix, bounding_box, fitvolume
+        #while any([p.is_alive() for p in processes]):
+        #    while not queue.empty():
+        #        status = queue.get()
+        #        #print("{}".format(status))
+        #    time.sleep(0.1)
+
+        _ = [p.join(timeout=1) for p in processes]
+        _ = [queue.get() for p in processes]
+
+        print("\n\tIntensities successfully extracted for {} side(s) in "
+              "{:.2f} secs".format(len(list(trajectory.keys())), time.time() - start_multi))
+
+        return IM_dict, BB_dict, FV_dict
+
+    def multiprocessing_xyplanesPOOL(self, lead_data, trajectory, dimension=['sag', 'cor']):
+        """extracts the intensities corresponding to the CTimaging, which is used as 'background' in the figure"""
+
+        start_multi = time.time()
+        manager = mp.Manager()
+        queue = mp.Queue()
+        IM_dict, BB_dict, FV_dict = manager.dict(), manager.dict(), manager.dict()
+        pool = mp.Pool(processes=4)
+        processes = [pool.apply_async(func=GetData.worker_xy_planes,
+                                      args=(self, trajectory[side], lead_data[side], dimension, side,
+                                            IM_dict, BB_dict, FV_dict, queue, ))
+                     for side in trajectory.keys()]
+        pool.close()
+        pool.join()
+        final_result = [process.get() for process in processes]
+
+        # prevent adding anything more to the queue and wait for queue to empty
+        #_ = [p.start() for p in processes]
+        #_ = [p.join(timeout=1) for p in processes]
+
+        print("\n\tIntensities successfully extracted for {} side(s) in "
+              "{:.2f} secs".format(len(list(trajectory.keys())), time.time() - start_multi))
+
+        return IM_dict, BB_dict, FV_dict
+
+
+    def get_xyplanes(self, trajectory, lead_model, limits=[(-4,4),(-4,4),(-10,20)], sample_width=10,
+                     direction=['sag', 'cor']):
+        # TODO: this was moved into the GetData class and MUST be removed
+        hd_trajectories = self.interpolate_trajectory(trajectory, resolution=10) # TODO: rename traj to trajectory after assigning in function
+
+        slices = {k: [] for k in direction}
+        imat = {k: [] for k in direction}
+        fitvolume = {k: [] for k in direction}
+        bounding_box = {k: [] for k in direction}
+
+        for idx, plane in enumerate(direction):
+            slices[plane] = list(range(limits[idx][0], limits[idx][1]+1, 1))
+            imat[plane], fitvolume[plane] = self.resample_CTplanes(hd_trajectories, plane, lead_model, resolution=.35)
+
+            span_vector = [sample_width, 0, 0] if plane != 'sag' else [0, sample_width, 0]
+
+            idx = [0, -1]
+            bounding_box_coords = []
+            for k in idx:
+                bounding_box_coords.append(hd_trajectories[k,:]-span_vector)
+                bounding_box_coords.append(hd_trajectories[k, :] + span_vector)
+            bounding_box_coords = np.array(bounding_box_coords)
+
+            axes_name = ['xx', 'yy', 'zz']
+            box = {k: [] for k in axes_name}
+            for i, dim in enumerate(axes_name):
+                box[dim] = bounding_box_coords.T[i,:].tolist()
+
+            bounding_box[plane] = box
+
+        return imat, bounding_box, fitvolume
 
     # ==============================    Functions related to estimation of rotation   ==============================
     @staticmethod
@@ -594,19 +755,3 @@ class GetData:
         marker['markers_y'] = marker['markers_head'] + (yvec * lead_models['lead_diameter'] / 2)
 
         return xvec, yvec, rotation, marker
-
-    @staticmethod
-    def color_plotsurface(imat2plot, cmap='gist_gray', alpha=1):
-        """defines a colormap which is used for plotting data later """
-        import matplotlib.cm as cm
-        from matplotlib import colors as colors
-
-        color_dimension = imat2plot  # change to desired fourth dimension
-        minn, maxx = color_dimension.min(), color_dimension.max()
-        norm = matplotlib.colors.Normalize(minn, maxx)
-        m = cm.ScalarMappable(norm=norm, cmap=cmap)
-        m.set_array([])
-        fcolors = m.to_rgba(color_dimension)
-        fcolors[:,:,-1] = np.ones((fcolors[:,:,-1].shape))*alpha
-
-        return fcolors
