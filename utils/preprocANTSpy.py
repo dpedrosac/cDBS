@@ -17,6 +17,8 @@ from utils.HelperFunctions import Output, Configuration, Imaging, FileOperations
 
 
 # TODO: 1. second run of ANTsCoRegisterCT2MRI not working
+# TODO: 2. logging ANTs output during registration not working
+
 class RegistrationANTs:
     """All necessary functions to register pre- and postoperative data as well as imaging to templates."""
 
@@ -50,43 +52,11 @@ class RegistrationANTs:
             Output.msg_box(text="No bias-corrected MRI found. Please double-check", title="Preprocessed MRI missing")
             return
 
-        # Start with Processing of data in parallel
-        start_multi = time.time()
-        status = mp.Queue()
-        processes = [mp.Process(target=self.ANTsCoregisterMultiprocessing,
-                                args=(filename_fixed, filename_moving, no_subj,
-                                      os.path.join(self.cfg['folders']['nifti'], no_subj), "registration", status))
-                     for filename_fixed, filename_moving, no_subj in fileIDs]
-        for p in processes:
-            p.start()
-
-        while any([p.is_alive() for p in processes]):
-            while not status.empty():
-                filename_fixed, filename_moving, no_subj = status.get()
-                print("\tRegistering {} (f) to {} (m), using ANTsPy".format(filename_fixed,
-                                                                          os.path.split(filename_moving)[1], no_subj))
-            time.sleep(0.1)
-
-        for p in processes:
-            p.join()
-
-        # Functions creating/updating pipeline log, which document individually all steps along with settings
-        for subjID in subjects:
-            files_processed = [(os.path.split(file_moving)[1], os.path.split(file_fixed)[1])
-                               for file_fixed, file_moving, no_subj in fileIDs if no_subj == subjID]
-            log_text = "{} successfully normalised (@{}): to \n{}, \n\n Mean Duration per subject: {:.2f} " \
-                       "secs".format(files_processed[0][0], time.strftime("%Y%m%d-%H%M%S"), files_processed[0][1],
-                                     (time.time() - start_multi) / len(subjects))
-            Output.logging_routine(text=Output.split_lines(log_text), cfg=self.cfg,
-                                             subject=str(subjID), module='MRI2templateRegistration',
-                                             opt=self.cfg['preprocess']['normalisation'], project="")
-
-        print('\nIn total, a list of {} subject(s) was processed. \nMRI registration took {:.2f}secs.'
-              ' overall\n'.format(len(subjects), time.time() - start_multi))
+        self.wrapper_multiprocessing(fileIDs, subjects, 'MRI')
 
     def CoregisterCT2MRI(self, subjects, input_folder, fixed_image='reg_run[0-9]_bc_t1'):
         """Co-registration of postoperative CT to preoperative MRI for further analyses in same space; before registration
-        presence of normalised data is ensured to avoid redundancy"""
+        presence of registered MRI data is ensured to avoid redundancy"""
 
         print('\nStarting co-registration for {} subject(s)'.format(len(subjects)))
         allfiles = FileOperations.get_filelist_as_tuple(inputdir=input_folder, subjects=subjects)
@@ -107,27 +77,37 @@ class RegistrationANTs:
             return
         fileIDs = list(FileOperations.inner_join(file_ID_CT, file_ID_MRI))
 
+        self.wrapper_multiprocessing(fileIDs, subjects, 'CT')
+
+    # ====================    Multiprocessing functions for both MRI2template and CT2MRI  ====================
+    def wrapper_multiprocessing(self, fileIDs, subjects, modality):
+        """To avoid redundancy between CT and MR  registration to common space, this part is wrapped up here """
+
+        working_dir = self.cfg['folders']['nifti']
+        prefix = '{}2template'.format(modality)
+
         # Start multiprocessing framework
         start_multi = time.time()
         status = mp.Queue()
         processes = [mp.Process(target=self.ANTsCoregisterMultiprocessing,
-                                args=(filename_fixed, filename_moving, no_subj,
-                                      os.path.join(self.cfg['folders']['nifti'], no_subj), "registration", status))
+                                args=(filename_fixed, filename_moving, no_subj,os.path.join(working_dir, no_subj),
+                                      'registration', prefix, status))
                      for filename_fixed, filename_moving, no_subj in fileIDs]
+
         for p in processes:
             p.start()
 
         while any([p.is_alive() for p in processes]):
             while not status.empty():
                 filename_fixed, filename_moving, no_subj = status.get()
-                print("Registering {} (f) to {} (m), using ANTsPy".format(filename_fixed,
+                print("\tRegistering {} (f) to {} (m), in ANTsPy\n".format(filename_fixed,
                                                                           os.path.split(filename_moving)[1], no_subj))
             time.sleep(0.1)
 
         for p in processes:
             p.join()
 
-        # Functions creating/updating pipeline log, which document individually all steps along with settings
+        # Functions creating/updating pipeline log, which documents all steps along with settings
         for subjID in subjects:
             files_processed = [(os.path.split(file_moving)[1], os.path.split(file_fixed)[1])
                                for file_fixed, file_moving, subj_no in fileIDs if subj_no == subjID]
@@ -135,29 +115,18 @@ class RegistrationANTs:
                        "secs".format(files_processed[0][0], time.strftime("%Y%m%d-%H%M%S"), files_processed[0][1],
                                      (time.time() - start_multi) / len(subjects))
             Output.logging_routine(text=Output.split_lines(log_text), cfg=self.cfg, subject=str(subjID),
-                                   module='CT2MRIRegistration', opt=self.cfg['preprocess']['registration'], project="")
+                                   module='{}-Registration'.format(modality),
+                                   opt=self.cfg['preprocess']['registration'], project="")
 
-        print('\nIn total, a list of {} subject(s) was processed; CT registration took {:.2f}secs. '
-              'overall'.format(len(subjects), time.time() - start_multi))
+        print('\nIn total, a list of {} subject(s) was processed; {} registration took {:.2f}secs. '
+              'overall'.format(len(subjects), modality, time.time() - start_multi))
 
-    # ====================    Multiprocessing functions for both MRI2template and CT2MRI  ====================
-    def ANTsCoregisterMultiprocessing(self, file_fixed, file_moving, subj, input_folder, flag, status):
+    def ANTsCoregisterMultiprocessing(self, file_fixed, file_moving, subj, input_folder, flag, step, status, run=1):
         """Performs Co-Registration taking advantage of multicores, i.e. multiple subjects processed in parallel"""
 
-        run = 1 # define run = 1 as default and look for other registrations later
         status.put(tuple([file_fixed, file_moving, subj]))
-
-        # if flag == 'normalisation':
-        #     prev_reg = ''
-        #    files2rename = {'0GenericAffine.mat': '0GenericAffineMRI2template.mat',
-        #                    '1InverseWarp.nii.gz': '1InverseWarpMRI2template.nii.gz',
-        #                    '1Warp.nii.gz': '1WarpMRI2template.nii.gz'}
-        # else:
         prev_reg = glob.glob(os.path.join(input_folder + "/" + self.cfg['preprocess'][flag]['prefix'] + 'run*' +
                                               os.path.split(file_moving)[1]))
-        files2rename = {'0GenericAffine.mat': '0GenericAffineRegistration.mat',
-                        '1InverseWarp.nii.gz': '1InverseWarpRegistration.nii.gz',
-                        '1Warp.nii.gz': '1WarpRegistration.nii.gz'}
 
         if not prev_reg:
             print('\tNo previous registration found, starting with first run')
@@ -173,7 +142,6 @@ class RegistrationANTs:
 
         filename_save = os.path.join(input_folder, self.cfg['preprocess'][flag]['prefix'] + 'run' +
                                      str(run) + '_' + os.path.split(file_moving)[1])
-
         log_filename = os.path.join(ROOTDIR, 'logs', "log_Registration_using_ANTs_{}_run_{}_".format(subj, str(run)) +
                                      time.strftime("%Y%m%d-%H%M%S") + '.txt')
 
@@ -191,15 +159,16 @@ class RegistrationANTs:
             metric = self.cfg['preprocess']['registration']['metric'][0]
 
         if self.cfg['preprocess']['registration']['default_registration'] == 'yes':
-            registered_images = self.default_registration(imaging, file_fixed, file_moving,
-                                                          input_folder + '/', log_filename, metric=metric)
+            registered_images = self.default_registration(imaging, file_fixed, file_moving, log_filename, metric=metric)
         else:
             registered_images = self.custom_registration(imaging, file_fixed, file_moving,
                                                          input_folder + '/', log_filename, run)
-        for key in files2rename:
-            name_of_file = glob.glob(os.path.join(input_folder, key))
-            if name_of_file:
-                os.rename(name_of_file[0],os.path.join(input_folder, files2rename[key]))
+
+        key2rename = {'fwdtransforms': ['{}_0GenericAffineRegistration.mat'.format(step), 1],
+                      'invtransforms': ['{}_1InvWarpMatrix.mat'.format(step), 0]}
+        for key, value in key2rename.items():
+            Transform = ants.read_transform(registered_images[key][value[1]])
+            ants.write_transform(Transform, os.path.join(input_folder, value[0]))
 
         ants.image_write(registered_images['warpedmovout'], filename=filename_save)
         FileOperations.create_folder(os.path.join(input_folder, "debug"))
@@ -212,21 +181,17 @@ class RegistrationANTs:
                                    os.path.split(file_moving)[1])
             shutil.move(file_moving, os.path.join(input_folder, 'debug', filename_dest))
 
-        skull_strip = 1
-        if skull_strip and 't1' in file_moving:
-            import antspynet
-            filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii')
-            print('\tExtracting brain mask for file: {}'.format(filename_brainmask))
-            brainmask = antspynet.brain_extraction(image=registered_images['warpedmovout'], verbose=False)
-            ants.image_write(image=brainmask, filename=filename_brainmask)
+        create_mask = True
+        if create_mask and 't1' in file_moving and not os.path.isfile(os.path.join(input_folder, 'brainmask_T1.nii')):
+            Imaging.create_brainmask(input_folder, subj=subj, registered_images=registered_images['warpedmovout'])
 
-    def default_registration(self, image_to_process, sequence1, sequence2, inputfolder, log_filename, metric='mattes'):
+    def default_registration(self, image_to_process, sequence1, sequence2, log_filename, metric='mattes'):
         """default version 'ANTs registration' routine, i.e. a Rigid transformation -> affine transformation ->
         symmetric normalisation (SyN). Further options available using the cmdline """
         #log_file = open(log_filename, 'w+') #TODO: logging not yet implemented
         registered = ants.registration(fixed=image_to_process[0], moving=image_to_process[1],
                                         type_of_transform=self.cfg['preprocess']['registration']['registration_method'],
-                                        grad_step=.1, aff_metric=metric, outprefix=inputfolder,
+                                        grad_step=.1, aff_metric=metric, # outprefix=inputfolder,
                                         initial_transform="[%s,%s,1]" % (sequence1, sequence2),
                                         verbose=self.verbose)
 
@@ -247,19 +212,18 @@ class RegistrationANTs:
             if idx == 0:
                 inpixeltype = image_to_process[0].pixeltype
 
-        warpedmovout = image_to_process[0].clone()
-        warpedfixout = image_to_process[1].clone()
+        warpedmovout, warpedfixout = image_to_process[0].clone(), image_to_process[1].clone()
 
         fixed_pointer = ants.utils.get_pointer_string(image_to_process[0])
         moving_pointer = ants.utils.get_pointer_string(image_to_process[1])
-
         wfo_pointer = ants.utils.get_pointer_string(warpedfixout)
         wmo_pointer = ants.utils.get_pointer_string(warpedmovout)
 
         processed_args = []
+        custom_registration = os.path.join(ROOTDIR, "utils",
+                                           self.cfg['preprocess']['registration']['custom_registration_file'])
         # TODO: add option for winsorize and for use_histogram or similar and add custom_registration_file to settings
-        with open(os.path.join(ROOTDIR, "utils",
-                               self.cfg['preprocess']['registration']['custom_registration_file']), "r") as f:
+        with open(custom_registration, "r") as f:
             for line in f:
                 processed_args.append(line.strip())
 
@@ -316,9 +280,7 @@ class RegistrationANTs:
             inputfolder = os.path.join(self.cfg['folders']['nifti'], subj)
             prev_reg = glob.glob(os.path.join(inputfolder + "/" +
                                               self.cfg['preprocess']['registration']['prefix'] + 'run*'))
-
-            if not prev_reg:
-                incomplete[idx] = True
+            incomplete[idx] = True if not prev_reg else False
 
         subjects2normalise = list(compress(subjects, incomplete))
         if subjects2normalise:
@@ -326,4 +288,4 @@ class RegistrationANTs:
                   'for {}'.format(len(subjects), len(subjects2normalise), ', '.join(x for x in subjects2normalise)))
             self.CoregisterMRI2template(subjects2normalise) # running normalisation with all identified subjects
         else:
-            print('T1-sequences of {} subject(s) was/were already normalised, proceeding!'.format(len(subjects)))
+            print('\tT1-sequences of {} subject(s) was/were already normalised, proceeding!'.format(len(subjects)))

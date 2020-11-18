@@ -11,6 +11,7 @@ import warnings
 from itertools import groupby
 from operator import itemgetter
 
+import scipy
 import numpy as np
 import yaml
 from PyQt5.QtWidgets import QMessageBox
@@ -262,13 +263,15 @@ class Imaging:
         Imaging.load_imageviewer(viewer_path, sorted(file_IDs))
 
     @staticmethod
-    def create_brainmask(input_folder, registered_images):
+    def create_brainmask(input_folder, subj, registered_images):
         """this function import antspynet in order to obtain a probabilistic brain mask for the T1 imaging"""
         import ants, antspynet
         filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii')
 
         brainmask = antspynet.brain_extraction(image=registered_images, verbose=False)
         ants.image_write(image=brainmask, filename=filename_brainmask)
+
+        return (filename_brainmask, subj)
 
     @staticmethod
     def sphere(diameter):
@@ -293,6 +296,15 @@ class Imaging:
             renamed_lead_data[side_temp] = info
             sides.append(side_temp)
         return renamed_lead_data, sides
+
+    @staticmethod
+    def resample_trajectory(orig_trajectory, resolution=100):
+        """interpolates between trajectory points thus creating a „high resolution“ version of it"""
+
+        hd_trajectory = []
+        for idx in range(np.array(orig_trajectory).shape[1]):
+            hd_trajectory.append(np.linspace(start=orig_trajectory[0, idx], stop=orig_trajectory[-1, idx], num=resolution))
+        return np.stack(hd_trajectory).T
 
 
 class FileOperations:

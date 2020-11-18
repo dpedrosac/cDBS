@@ -4,24 +4,22 @@
 import sys
 import yaml
 import os
-import utils.HelperFunctions as HF
+
+from utils.HelperFunctions import Output, Configuration, FileOperations, MatlabEquivalent
 import private.allToolTips as setToolTips
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, \
     QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox
+from dependencies import ROOTDIR, FILEDIR
 
 
 class GuiSettingsDCM2NII(QWidget):
     """ This is a rather simple helper GUI, which aims at setting the options for Chris Rordens dcm2nii routines to
     convert DICOM files/folders to NIFTI"""
 
-    # TODO the Tooltips are really obnoxious so far! Is there no elegant way for the rootdir definition?
-
     def __init__(self, parent=None):
         super(QWidget, self).__init__(parent=None)
-        # Load configuration files and general settings
-        rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-        self.cfg = HF.LittleHelpers.load_config(rootdir)
+        self.cfg = Configuration.load_config(ROOTDIR)
 
         # General appearance of the GUI
         self.setFixedSize(600, 400)
@@ -156,8 +154,7 @@ class GuiSettingsDCM2NII(QWidget):
 
         if self.cfg == "":
             print()
-            HF.LittleHelpers.msg_box(title="Warning",
-                                     text="No default settings found, please double check the folder content. "
+            Output.msg_box(title="Warning", text="No default settings found, please double check the folder content. "
                                           "Continuing with same settings.")
         else:
             if self.cfg["preprocess"]["dcm2nii"]["BIDSsidecar"] == 'yes':
@@ -190,8 +187,7 @@ class GuiSettingsDCM2NII(QWidget):
 
         self.cfg["preprocess"]["dcm2nii"]["OutputFileStruct"] = self.lineEditFilename.text()
         self.cfg["preprocess"]["dcm2nii"]["IncludeFiles"] = self.lineEditIncludeFiles.text()
-        HF.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-
+        Configuration.save_config(self.cfg["folders"]["rootdir"], self.cfg)
         event.accept()
 
     def load_default_DCM2NIIsettings(self):
@@ -200,8 +196,7 @@ class GuiSettingsDCM2NII(QWidget):
         ret = QMessageBox.question(self, 'MessageBox', "Do you really want to restore default settings for dcm2niix?",
                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if ret == QMessageBox.Yes:
-            rootdir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-            with open(os.path.join(rootdir, 'private/') + 'config_imagingTBdef.yaml', 'r') as cfg:
+            with open(os.path.join(ROOTDIR, 'private/') + 'config_imagingTBdef.yaml', 'r') as cfg:
                 cfg_temp = yaml.safe_load(cfg)
                 self.cfg["preprocess"]["dcm2nii"] = cfg_temp["preprocess"]["dcm2nii"]
         self.get_settings_from_config()

@@ -14,6 +14,6 @@ from utils.HelperFunctions import Output, Configuration
 from utils import leadRotation
 
 inputfolder = os.path.join(FILEDIR, 'NIFTI')
-side = 'left'
+side = 'right'
 
 leadRotation.PrepareData().getData(subj='subj1', inputfolder=inputfolder, side=side)

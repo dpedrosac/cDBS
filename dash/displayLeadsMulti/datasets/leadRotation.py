@@ -141,14 +141,14 @@ class GetImaging:
                              np.multiply(lead_settings[single_lead['model']]['markerposition'], unit_vector))
         print(marker_mm)
         intensity, box, dir_level, intensity_adv, box_adv = [dict() for _ in range(5)]
-        intensity['marker'], box['marker'], _ = GetImaging.get_axialplanes(marker_mm, single_lead,
+        intensity['marker'], box['marker'], _ = GetImaging.get_axialplanes_dot(marker_mm, single_lead,
                                                                            window_size=extractradius)
-        intensity_adv['marker'], box_adv['marker'], _ = GetImaging.get_axialplanes_dot(marker_mm, single_lead,
-                                                                           window_size=extractradius)
+#        intensity_adv['marker'], box_adv['marker'], _ = GetImaging.get_axialplanes_dot(marker_mm, single_lead,
+#                                                                           window_size=extractradius)
         for idx, l in enumerate(levels, start=1):
             dir_level[l] = np.round(all_marker['markers_head'] + [0, 0, offset] +
                                     np.multiply(unit_vector, idx * lead_settings[single_lead['model']]['leadspacing']))
-            intensity[l], box[l], _ = GetImaging.get_axialplanes(dir_level[l], single_lead, window_size=extractradius)
+            intensity[l], box[l], _ = GetImaging.get_axialplanes_dot(dir_level[l], single_lead, window_size=extractradius)
 
         return intensity, box, dir_level
 
@@ -173,13 +173,20 @@ class GetImaging:
         return imat, bounding_box, fitvolume
 
     @staticmethod
-    def get_axialplanes_dot(marker_coordinates, single_lead, window_size=10, resolution=.5, transformation_matrix=np.eye(4)):
+    def get_axialplanes_dot(marker_coordinates, single_lead, window_size=10, resolution=1, transformation_matrix=np.eye(4)):
         """returns a plane at a specific window with a certain direction"""
 
         unit_vector = single_lead['normtraj_vector']
-        xvec_unrot = np.cross(unit_vector, [1, 0, 0])
+        perpendicular_vectors = {0: np.random.randn(3), 1: np.random.randn(3)}
+
+        for num, vec in perpendicular_vectors.items():
+            perpendicular_vectors[num] -= vec.dot(unit_vector) * unit_vector
+            perpendicular_vectors[num] /= np.linalg.norm(perpendicular_vectors[num])
+
+        xvec_unrot = np.cross(unit_vector, perpendicular_vectors[0])
         #xvec_unrot = np.divide(xvec_unrot, np.linalg.norm(xvec_unrot))
-        d = np.dot(xvec_unrot, marker_coordinates)
+        # d = np.dot(xvec_unrot, marker_coordinates)
+        d = np.dot(unit_vector, marker_coordinates)
 
         bounding_box_coords = []
         for k in range(3):
@@ -190,7 +197,9 @@ class GetImaging:
 
         meshX, meshY = np.meshgrid(bounding_box[0, :], bounding_box[1, :])
         #meshZ = np.repeat(bounding_box[-1,0], len(meshX.flatten()))
-        meshZ = (d - xvec_unrot[0] * meshX - xvec_unrot[1] * meshY) / xvec_unrot[2]
+        # meshZ = (d - xvec_unrot[0] * meshX - xvec_unrot[1] * meshY) / xvec_unrot[2]
+        meshZ = (d - unit_vector[0] * meshX - unit_vector[1] * meshY) / unit_vector[2]
+
 
         fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
         fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
@@ -199,38 +208,10 @@ class GetImaging:
 
         from matplotlib import pyplot as plt
         plt.figure()
-        plt.imshow(imat)
+        plt.imshow(np.flip(imat))
+        plt.hist(imat)
 
         return imat, bounding_box, fitvolume
-
-    @staticmethod
-    def resample_CTplanes(hd_trajectories, direction, single_lead, resolution=.2, sample_width=10, transformation_matrix=np.eye(4)):
-        """Function resampling intesities of the source imaging to a grid which is later used to visualise the
-        leads. [ea_mancor_updatescene lines 264f]"""
-
-        direction = ''.join(direction) if type(direction) == list else direction  # in case direction is entered as list
-
-        xvec = np.arange(start=-sample_width, stop=sample_width+resolution, step=resolution)
-        meanfitline = np.vstack((hd_trajectories.T, np.ones(shape=(1, hd_trajectories.T.shape[1])))) # needed for transformation
-        addvolume = np.tile(xvec,(len(meanfitline.T),1))
-
-        fitvolume = []
-        for t in range(4):
-            fitvolume.append(np.tile(meanfitline[t,:], xvec.shape).reshape(xvec.shape[0], meanfitline.shape[1]).T)
-        fitvolume_orig = np.stack(fitvolume)
-
-        if direction == 'cor':
-            fitvolume_orig[0,:,:] += addvolume
-        elif direction == 'sag':
-            fitvolume_orig[1, :, :] += addvolume
-        elif direction == 'tra':
-            fitvolume_orig[2, :, :] += addvolume
-
-        fitvolume = np.linalg.solve(transformation_matrix, np.reshape(fitvolume_orig, (4, -1), order='F'))
-        resampled_points = GetImaging.interpolate_CTintensities(single_lead, fitvolume)
-        imat = np.reshape(resampled_points, (meanfitline.shape[1], -1), order='F')
-
-        return imat, fitvolume_orig
 
     @staticmethod
     def interpolate_CTintensities(single_lead, fitvolume):

@@ -12,6 +12,7 @@ from utils.HelperFunctions import Output, Configuration, Imaging, FileOperations
 from dependencies import ROOTDIR
 from ants.utils import n4_bias_field_correction as n4biascorr
 
+
 # TODO: 1. Bias correction for DTI results in enormous images
 class BiasCorrection:
     """this class contains all functions used by the ANTsPy Toolbox; in general the multiprocessing routines are

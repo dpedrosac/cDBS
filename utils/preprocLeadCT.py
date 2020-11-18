@@ -65,7 +65,9 @@ class LeadWorks:
                 return
             else:
                 T1imaging = ants.image_read(file_id_T1[0][0])
-                Imaging.create_brainmask(input_folder=inputfolder, registered_images=T1imaging)
+                file_id_brainMask = Imaging.create_brainmask(input_folder=inputfolder, subj=''.join(subjects),
+                                                             registered_images=T1imaging)
+                file_id_brainMask = [file_id_brainMask] if type(file_id_brainMask) == tuple else file_id_brainMask
 
         fileID = list(FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all information to one list
 

@@ -24,7 +24,7 @@ import plotly.graph_objs as go
 from matplotlib import cm
 
 from dependencies import ROOTDIR
-from utils.HelperFunctions import Output, Configuration
+from utils.HelperFunctions import Output, Configuration, Imaging
 
 
 class PlotRoutines: #  656 lines so far
@@ -685,7 +685,7 @@ class GetData:
     def get_xyplanes(self, trajectory, lead_model, limits=[(-4,4),(-4,4),(-10,20)], sample_width=10,
                      direction=['sag', 'cor']):
         # TODO: this was moved into the GetData class and MUST be removed
-        hd_trajectories = self.interpolate_trajectory(trajectory, resolution=10) # TODO: rename traj to trajectory after assigning in function
+        hd_trajectories = Imaging.interpolate_trajectory(trajectory, resolution=10) # TODO: rename traj to trajectory after assigning in function
 
         slices = {k: [] for k in direction}
         imat = {k: [] for k in direction}

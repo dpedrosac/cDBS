@@ -55,6 +55,7 @@ class PreprocessDCM:
         print('\nExtracting DICOM files for {} subject(s)'.format(len(dicomfolders)))
         start_multi = time.time()
 
+        # self.dcm2niix_multiprocessing(self, {'deiss_frank'}, int(1), self.get_dcm2niix(self.DCM2NIIX_ROOT), last_idx, 1, [])
         # this is the old method of using multiprocessing ressources; not used anymore as less effective
         status = mp.Queue()
         processes = [mp.Process(target=self.dcm2niix_multiprocessing,
@@ -97,21 +98,23 @@ class PreprocessDCM:
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
             input_folder_files = [f.path for f in os.scandir(input_folder_name)
                                   if (f.is_dir() and ('100' in f.path or '001' in f.path))]
-            if type(input_folder_files) == list:
-                input_folder_files = ''.join(input_folder_files)
+            # if type(input_folder_files) == list:
+            #    input_folder_files = ''.join(input_folder_files)
 
             orig_stdout = sys.stdout
             sys.stdout = open(log_filename, 'w')
-            subprocess.call([dcm2niix_bin,
-                             '-b', self.cfg['preprocess']['dcm2nii']['BIDSsidecar'][0],
-                             '-z', self.cfg['preprocess']['dcm2nii']['OutputCompression'][0],
-                             '-f', self.cfg['preprocess']['dcm2nii']['OutputFileStruct'],
-                             '-o', subj_outdir,
-                             '-w', str(self.cfg['preprocess']['dcm2nii']['NameConflicts']),
-                             '-v', str(self.cfg['preprocess']['dcm2nii']['Verbosity']),
-                             '-x', str(self.cfg['preprocess']['dcm2nii']['ReorientCrop']),
-                             input_folder_files],
-                            stdout=sys.stdout, stderr=subprocess.STDOUT)
+            for folder in input_folder_files:
+                subprocess.call([dcm2niix_bin,
+                                 '-b', self.cfg['preprocess']['dcm2nii']['BIDSsidecar'][0],
+                                 '-z', self.cfg['preprocess']['dcm2nii']['OutputCompression'][0],
+                                 '-f', self.cfg['preprocess']['dcm2nii']['OutputFileStruct'],
+                                 '-o', subj_outdir,
+                                 '-w', str(self.cfg['preprocess']['dcm2nii']['NameConflicts']),
+                                 '-v', str(self.cfg['preprocess']['dcm2nii']['Verbosity']),
+                                 '-x', str(self.cfg['preprocess']['dcm2nii']['ReorientCrop']),
+                                 folder],
+                                stdout=sys.stdout, stderr=subprocess.STDOUT)
+
             sys.stdout.close()
             sys.stdout = orig_stdout
 
