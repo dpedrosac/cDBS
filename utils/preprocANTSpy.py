@@ -90,7 +90,7 @@ class RegistrationANTs:
         start_multi = time.time()
         status = mp.Queue()
         processes = [mp.Process(target=self.ANTsCoregisterMultiprocessing,
-                                args=(filename_fixed, filename_moving, no_subj,os.path.join(working_dir, no_subj),
+                                args=(filename_fixed, filename_moving, no_subj, os.path.join(working_dir, no_subj),
                                       'registration', prefix, status))
                      for filename_fixed, filename_moving, no_subj in fileIDs]
 
@@ -126,10 +126,11 @@ class RegistrationANTs:
 
         status.put(tuple([file_fixed, file_moving, subj]))
         prev_reg = glob.glob(os.path.join(input_folder + "/" + self.cfg['preprocess'][flag]['prefix'] + 'run*' +
-                                              os.path.split(file_moving)[1]))
-
+                                              os.path.basename(file_moving)))
         if not prev_reg:
             print('\tNo previous registration found, starting with first run')
+            filename_save = os.path.join(input_folder, self.cfg['preprocess'][flag]['prefix'] + 'run' +
+                                         str(run) + '_' + os.path.basename(file_moving))
         elif re.search(r'\w+{}.'.format('CT_'), file_moving, re.IGNORECASE) and file_moving.endswith('.nii'):
             print('\tNo second run for CT-MRI registrations possible.')
             return
@@ -137,11 +138,14 @@ class RegistrationANTs:
             allruns = [re.search(r'\w+(run)([\d.]+)', x).group(2) for x in prev_reg]
             lastrun = int(sorted(allruns)[-1])
             file_moving = os.path.join(input_folder, self.cfg["preprocess"]["registration"]["prefix"] + 'run' +
-                                            str(lastrun) + '_' + os.path.split(file_moving)[1])
+                                            str(lastrun) + '_' + os.path.basename(file_moving)) # update for second run
             run = lastrun + 1
+            n4prefix = self.cfg['preprocess']['ANTsN4']['prefix']
+            basename = '{}{}'.format(n4prefix, file_moving.split(n4prefix)[1])
+            filename_save = os.path.join(input_folder, self.cfg['preprocess'][flag]['prefix'] + 'run' +
+                                     str(run) + '_' + basename)
 
-        filename_save = os.path.join(input_folder, self.cfg['preprocess'][flag]['prefix'] + 'run' +
-                                     str(run) + '_' + os.path.split(file_moving)[1])
+        print(filename_save)
         log_filename = os.path.join(ROOTDIR, 'logs', "log_Registration_using_ANTs_{}_run_{}_".format(subj, str(run)) +
                                      time.strftime("%Y%m%d-%H%M%S") + '.txt')
 
@@ -159,7 +163,8 @@ class RegistrationANTs:
             metric = self.cfg['preprocess']['registration']['metric'][0]
 
         if self.cfg['preprocess']['registration']['default_registration'] == 'yes':
-            registered_images = self.default_registration(imaging, file_fixed, file_moving, log_filename, metric=metric)
+            registered_images = self.default_registration(imaging, file_fixed, file_moving, log_filename, metric=metric,
+                                                          step=step)
         else:
             registered_images = self.custom_registration(imaging, file_fixed, file_moving,
                                                          input_folder + '/', log_filename, run)
@@ -174,27 +179,28 @@ class RegistrationANTs:
         FileOperations.create_folder(os.path.join(input_folder, "debug"))
 
         if run > 1: #  Previous registrations are moved to debug-folder
+            prev_reg = ''.join(prev_reg) if type(prev_reg) == list else prev_reg
             filename_dest = re.sub(r'({}run[0-9]_)+({})'.format(self.cfg['preprocess']['registration']['prefix'],
                                                                 self.cfg['preprocess']['ANTsN4']['prefix']),
                                    '{}RUNPREV{}_{}'.format(self.cfg['preprocess']['registration']['prefix'], lastrun,
                                                            self.cfg['preprocess']['ANTsN4']['prefix']),
-                                   os.path.split(file_moving)[1])
-            shutil.move(file_moving, os.path.join(input_folder, 'debug', filename_dest))
+                                   os.path.basename(prev_reg))
+            shutil.move(prev_reg, os.path.join(input_folder, 'debug', filename_dest))
 
         create_mask = True
         if create_mask and 't1' in file_moving and not os.path.isfile(os.path.join(input_folder, 'brainmask_T1.nii')):
             Imaging.create_brainmask(input_folder, subj=subj, registered_images=registered_images['warpedmovout'])
 
-    def default_registration(self, image_to_process, sequence1, sequence2, log_filename, metric='mattes'):
+    def default_registration(self, image_to_process, sequence1, sequence2, log_filename, metric='mattes', step='MRI'):
         """default version 'ANTs registration' routine, i.e. a Rigid transformation -> affine transformation ->
         symmetric normalisation (SyN). Further options available using the cmdline """
         #log_file = open(log_filename, 'w+') #TODO: logging not yet implemented
+        transform = "[%s,%s,1]" % (sequence1, sequence2) if step == 'CT' else "[%s,%s,1]" % (sequence1, sequence2) #"identity"
         registered = ants.registration(fixed=image_to_process[0], moving=image_to_process[1],
                                         type_of_transform=self.cfg['preprocess']['registration']['registration_method'],
                                         grad_step=.1, aff_metric=metric, # outprefix=inputfolder,
-                                        initial_transform="[%s,%s,1]" % (sequence1, sequence2),
+                                        initial_transform=transform,
                                         verbose=self.verbose)
-
         return registered
 
     def custom_registration(self, image_to_process, sequencename1, sequencename2, inputfolder, log_filename, runs):
