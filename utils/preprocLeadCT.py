@@ -543,6 +543,7 @@ class LeadWorks:
     def connected_objects(data_array, connectivity_values=26):
         """ function creating a list of objects that are connected and satisfy certain conditions. This aims at
         replacing Mathworks bwconncomp.m function https://www.mathworks.com/help/images/ref/bwconncomp.html"""
+
         import cc3d
         labels_out = cc3d.connected_components(np.array(data_array), connectivity=connectivity_values)
         return labels_out

@@ -7,13 +7,13 @@ importlib-metadata==1.7.0
 Keras==2.4.3
 Keras-Applications==1.0.8
 Keras-Preprocessing==1.1.0
-matplotlib==3.2.1
+matplotlib>=3.2.1
 numpy==1.18.5
-pandas==1.0.3
+pandas>=1.0.3
 pathos==0.2.5
 pox==0.2.7
 ppft==1.6.6.1
-PyQt5==5.15.0
+PyQt5>=5.15.0
 PyQt5-sip==12.8.0
 PyQt5-stubs==5.14.2.2
 pyqtgraph==0.10.0
@@ -26,8 +26,8 @@ SimpleITK==1.2.4
 sklearn==0.0
 tableone==0.6.6
 tabulate==0.8.7
-tensorboard==2.2.2
+tensorboard>=2.2.2
 tensorboard-plugin-wit==1.6.0.post3
-tensorflow==2.2.1
+tensorflow>=2.2.1
 tensorflow-estimator==2.2.0
 tensorflow-probability==0.10.0

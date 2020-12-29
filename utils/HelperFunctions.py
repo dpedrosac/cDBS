@@ -10,6 +10,7 @@ import sys
 import warnings
 from itertools import groupby
 from operator import itemgetter
+import ants
 
 import scipy
 import numpy as np
@@ -285,19 +286,6 @@ class Imaging:
         return struct.astype(np.bool)
 
     @staticmethod
-    def estimate_hemisphere(lead_data):
-        """estimates the available sides and returns a list of all available leads; as all data is in LPS (Left,
-        Posterior, Superior) so that side can be deduced from trajectory"""
-
-        sides = []
-        renamed_lead_data = dict()
-        for info in lead_data:
-            side_temp = 'right' if not info['trajectory'][0, 0] > info['trajectory'][-1, 0] else 'left'
-            renamed_lead_data[side_temp] = info
-            sides.append(side_temp)
-        return renamed_lead_data, sides
-
-    @staticmethod
     def resample_trajectory(orig_trajectory, resolution=100):
         """interpolates between trajectory points thus creating a „high resolution“ version of it"""
 
@@ -455,6 +443,76 @@ class LeadWorks:
             renamed_intensityProfiles[side_temp] = intensityProfiles[idx]
             sides.append(side_temp)
         return renamed_lead_data, renamed_skelSkalms, renamed_intensityProfiles, sides
+
+    @staticmethod
+    def transform_coordinates(coordinates, from_imaging, to_imaging, file_invMatrix):
+        """coordinate transformation from one imaging modality to other; coordinates must be included as integers"""
+
+        transformed = {'points': [], 'indices': []}
+        physical_points = ants.transform_index_to_physical_point(from_imaging, coordinates)
+        transformed['points'] = ants.apply_ants_transform(ants.read_transform(file_invMatrix), physical_points)
+        transformed['indices'] = ants.transform_physical_point_to_index(image=to_imaging, point=transformed['points'])
+
+        return transformed
+
+    @staticmethod
+    def transform_coordinates(coordinates, from_imaging, to_imaging, file_invMatrix):
+        """coordinate transformation from one imaging modality to other; coordinates must be included as integers"""
+
+        transformed = {'points': [], 'indices': []}
+        physical_points = ants.transform_index_to_physical_point(from_imaging, coordinates)
+        transformed['points'] = ants.apply_ants_transform(ants.read_transform(file_invMatrix), physical_points)
+        transformed['indices'] = ants.transform_physical_point_to_index(image=to_imaging, point=transformed['points'])
+
+        return transformed
+
+
+    @staticmethod
+    def interpolate_CTintensities(points2interpolate, filenameImaging, method='linear'):
+        import SimpleITK as sitk
+
+        if not filenameImaging:
+            warnings.warn(message="No filename provided to interpolate intensities from!")
+            return
+
+        img = sitk.ReadImage(filenameImaging)
+        physical_points = list(map(tuple, points2interpolate[0:3, :].T))
+        # physical_points = physical_points[0:5]  # for debug purposes
+        num_samples = len(physical_points)
+        physical_points = [img.TransformContinuousIndexToPhysicalPoint(pnt) for pnt in physical_points]
+
+        # interp_grid_img = sitk.Image((len(physical_points) *([1] * (img.GetDimension() - 1))), sitk.sitkUInt8)
+        interp_grid_img = sitk.Image([num_samples] + [1] * (img.GetDimension() - 1), sitk.sitkUInt8)
+        displacement_img = sitk.Image([num_samples] + [1] * (img.GetDimension() - 1), sitk.sitkVectorFloat64,
+                                      img.GetDimension())
+
+        for i, pnt in enumerate(physical_points):
+            displacement_img[[i] + [0] * (img.GetDimension() - 1)] = np.array(pnt) - np.array(
+                interp_grid_img.TransformIndexToPhysicalPoint([i] + [0] * (img.GetDimension() - 1)))
+
+        if method == 'linear':
+            interpolator_enum = sitk.sitkLinear
+        elif method == 'polygon':
+            interpolator_enum = sitk.sitkLinear
+#            interpolator_enum = sitk.sitkPolygon3
+        else:
+            warnings.warn(message="Unknown interpolation method. Please check sitk package for options")
+            return
+
+        default_output_pixel_value = 0.0
+        output_pixel_type = sitk.sitkFloat32 if img.GetNumberOfComponentsPerPixel() == 1 else sitk.sitkVectorFloat32
+        resampled_temp = sitk.Resample(img, interp_grid_img, sitk.DisplacementFieldTransform(displacement_img),
+                                       interpolator_enum, default_output_pixel_value, output_pixel_type)
+
+        resampled_points = [resampled_temp[x, 0, 0] for x in range(resampled_temp.GetWidth())]
+        debug = False # only necessary to see whether results are meaningful
+        if debug:
+            for i in range(resampled_temp.GetWidth()):
+                print(str(img.TransformPhysicalPointToContinuousIndex(physical_points[i])) + ': ' + str(
+                    resampled_temp[[i] + [0] * (img.GetDimension() - 1)]) + '\n')
+
+        return np.array(resampled_points)
+
 
 
 class MatlabEquivalent:

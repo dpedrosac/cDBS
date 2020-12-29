@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import multiprocessing as mp
 import os
 import re
 import subprocess
 import sys
 import time
 
-import multiprocessing as mp
 import pandas as pds
 
 from dependencies import ROOTDIR
@@ -54,9 +54,6 @@ class PreprocessDCM:
 
         print('\nExtracting DICOM files for {} subject(s)'.format(len(dicomfolders)))
         start_multi = time.time()
-
-        # self.dcm2niix_multiprocessing(self, {'deiss_frank'}, int(1), self.get_dcm2niix(self.DCM2NIIX_ROOT), last_idx, 1, [])
-        # this is the old method of using multiprocessing ressources; not used anymore as less effective
         status = mp.Queue()
         processes = [mp.Process(target=self.dcm2niix_multiprocessing,
                                 args=(name, ind, self.get_dcm2niix(self.DCM2NIIX_ROOT), last_idx,
@@ -98,8 +95,6 @@ class PreprocessDCM:
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
             input_folder_files = [f.path for f in os.scandir(input_folder_name)
                                   if (f.is_dir() and ('100' in f.path or '001' in f.path))]
-            # if type(input_folder_files) == list:
-            #    input_folder_files = ''.join(input_folder_files)
 
             orig_stdout = sys.stdout
             sys.stdout = open(log_filename, 'w')
@@ -188,7 +183,7 @@ class PreprocessDCM:
         https://github.com/devhliu/intelligentLiver/blob/master/dcmconv/dcm2niix.py"""
 
         if sys.platform == 'linux':
-            dcm2niix_bin = 'dcm2niix'
+            dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'dcm2niix')
         elif sys.platform == 'macos' or sys.platform == 'darwin':
             dcm2niix_bin = os.path.join(DCM2NIIX_ROOT, 'macos', 'dcm2niix')
         else:

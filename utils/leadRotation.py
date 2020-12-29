@@ -5,6 +5,7 @@ import itertools
 import math
 import os
 import sys
+import re
 import warnings
 from pathlib import Path
 
@@ -25,43 +26,45 @@ class PrepareData:
         self.cfg = Configuration.load_config(ROOTDIR)
         self.debug = False
 
-    def getData(self, subj, inputfolder, side='right'):
-        """loads all necessary data in order to process it later"""
+    def getData(self, subj, input_folder, side='right'):
+        """loads necessary data for displaying lead rotation (unsupervised recognition). unctions based on
+        https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m"""
 
-        filename_leadmodel = os.path.join(os.path.join(inputfolder, subj, 'elecModels_' + subj + '.pkl'))
-        print(filename_leadmodel)
+        filename_leadmodel = os.path.join(os.path.join(input_folder, subj, 'elecModels_' + subj + '.pkl'))
         if not os.path.isfile(filename_leadmodel):
             print("\n\t...Lead data not found, please make sure it is available")
             return
 
-        lead_data_raw, iP, sS = LeadWorks.load_leadModel(inputfolder, filename_leadmodel)
-        lead_data, sS, iP, sides = LeadWorks.estimate_hemisphere(lead_data_raw, sS, iP)  # determines which side is used in lead_data
+        lead_data_raw, iP, sS = LeadWorks.load_leadModel(input_folder, filename_leadmodel)
+        lead_data, sS, iP, sides = LeadWorks.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
         single_lead = lead_data[side]
 
         if lead_data[side]['model'] not in ('Boston Vercise Directional', 'St Jude 6172', 'St Jude 6173'):
-            print("\n\t...Rotation not required given 'non-directional' leads; Setting both rotation values to '0'")
-            for s in sides:
-                lead_data[s]['rotation'] = 0
-            LeadWorks.save_leadModel(lead_data, iP, sS)
-            rotation_results = dict()
-            return rotation_results
+            print("\n\t...Rotation not required given 'non-directional' leads")
+            rotation = {'angle': -math.pi / 10}
+            return rotation
         else:
             # lead_model, default_positions, default_coordinates = LeadWorks.get_default_lead(lead_data_raw[0])  # all in [mm] #TODO necessary at all???
-            CTimaging = ants.image_read(filename=os.path.join(*lead_data[side]['filenameCTimaging']))
+            CTimaging_trans = ants.image_read(filename=os.path.join(*lead_data[side]['filenameCTimaging']))
+            CTimaging_orig = ants.image_read('/'.join(re.split(r".reg_run[0-9].",
+                                                               os.path.join(*lead_data[side]['filenameCTimaging']))))
 
-        print(lead_data[side]['model'])
-        slices, boxes, dir_level = GetImaging.extractAxialSlices(single_lead, pixVal=(.65, .65, .69), extractradius=30, offset=0)
-        angles, intensities_marker_angle, vector_marker = GetImaging.orient_intensityprofile(slices['marker'],
-                                                                                             pixdim=CTimaging.spacing,
-                                                                                             radius=8)
+        slices, boxes, marker_coord, directional_coord = \
+            GetImaging.extractAxialSlices(single_lead, CTimaging_trans, CTimaging_orig, extractradius=30, offset=0)
+
+        # Extract data for marker on top
+        angles, intensities_marker_angle, vector_marker = \
+            GetImaging.orient_intensityprofile(slices['marker'], pixdim=CTimaging_trans.spacing, radius=8)
+
+        # Extract data for directional contacts
         levels = dict([(k, r) for k, r in slices.items() if k.startswith('level')])
-        _, intensities_level_angle, vectors_levels = [{k: [] for k in levels} for _ in range(3)]
+        _, intensities_level_angle, vector_levels = [{k: [] for k in levels} for _ in range(3)]
         for lv in levels:
-            _, intensities_level_angle[lv], vectors_levels[lv] = \
-                GetImaging.orient_intensityprofile(slices[lv], pixdim=CTimaging.spacing, radius=16)
+            _, intensities_level_angle[lv], vector_levels[lv] = \
+                GetImaging.orient_intensityprofile(slices[lv], pixdim=CTimaging_trans.spacing, radius=16)
 
         [peak, markerfft] = GetImaging.orient_intensityPeaks(intensities_marker_angle)
-        [valley, _] = GetImaging.orient_intensityPeaks([element * -1 for element in intensities_marker_angle])
+        [valley_marker, _] = GetImaging.orient_intensityPeaks([element * -1 for element in intensities_marker_angle])
 
         default = 'anterior'
         if default == 'anterior':
@@ -85,37 +88,42 @@ class PrepareData:
                                (math.sin(peakangle) * math.sin(yaw) * math.sin(pitch)))  # Sitz et al. 2017
         peakangle_corrected = np.arctan(peakangle_corrected)
 
-        if peakangle < math.pi and peakangle_corrected < 0 and (peakangle - peakangle_corrected) > math.pi/2:
+        if peakangle < math.pi and peakangle_corrected < 0 and (peakangle - peakangle_corrected) > math.pi / 2:
             peakangle_corrected = peakangle_corrected + math.pi
 
-        if peakangle > math.pi and peakangle_corrected > 0 and (peakangle - peakangle_corrected) > math.pi/2:
+        if peakangle > math.pi and peakangle_corrected > 0 and (peakangle - peakangle_corrected) > math.pi / 2:
             peakangle_corrected = peakangle_corrected - math.pi
 
-        roll = peakangle_corrected
+        roll_marker = peakangle_corrected
 
-        sum_intensity, roll, dir_valleys = GetImaging.determine_segmented_orientation(intensities_level_angle, roll, yaw, pitch, dir_level)
+        sum_intensity, roll, dir_valleys, roll_angles = \
+            GetImaging.determine_segmented_orientation(intensities_level_angle, roll_marker, yaw, pitch,
+                                                       directional_coord)
 
-        return angles, slices, intensities_marker_angle, intensities_level_angle, sum_intensity, roll, dir_valleys, markerfft, valley, peak
-        # TODO at this point a list of all necessary returns is required to create the data which is needed for plotting
+        # Wrap up all results and return a single dictionary for further processing
+        intensities = {key: np.array([value, angles]).T for key, value in intensities_level_angle.items()}
+        intensities.update({'marker': np.array([intensities_marker_angle, angles]).T})
+        dir_valleys.update({'marker': valley_marker})
+        directional_coord.update({'marker': marker_coord})
+        vector_levels.update({'marker': vector_marker})
+        roll.update({'marker': roll_marker})
 
+        rotation = {'peak': peak,
+                    'coordinates': directional_coord,
+                    'slices': slices,
+                    'plot_box': boxes,
+                    'intensities': intensities,
+                    'sum_intensities': sum_intensity,
+                    'valleys': dir_valleys,
+                    'roll': roll,
+                    'pitch': pitch,
+                    'yaw': yaw,
+                    'markerfft': markerfft,
+                    'vector': vector_levels,
+                    'roll_angles': roll_angles,
+                    'angle': np.rad2deg(roll['marker'])}
 
-        # from matplotlib import pyplot as plt
-        # fig = plt.figure()
-        # fig.add_subplot(1,3,1)
-        # plt.imshow(slices['marker'])
-        # fig.add_subplot(1,3,2)
-        # plt.imshow(slices['level1'])
-        # fig.add_subplot(1,3,3)
-        # plt.imshow(slices['level2'])
-        #
-        # plt.figure()
-        # fig.add_subplot(1,3,1)
-        # plt.plot(intensities_marker_angle)
-        # fig.add_subplot(1,3,2)
-        # plt.plot(intensities_level_angle['level1'])
-        # fig.add_subplot(1,3,3)
-        # plt.plot(intensities_level_angle['level2'])
-
+        return rotation
 
 
 class GetImaging:
@@ -126,152 +134,88 @@ class GetImaging:
         self.debug = _debug
 
     @staticmethod
-    def extractAxialSlices(single_lead, pixVal, extractradius=30, offset=0, levels=('level1', 'level2')):
+    def extractAxialSlices(single_lead, CTimaging_trans, CTimaging_orig,
+                           extractradius=30, offset=0, levels=('level1', 'level2')):
+        """ extracts intensities of axial slices of the CT. In order to get a consistent artefact
+        at the marker, a transformation to the original data is necessary as this corresponds to a steeper angle"""
 
+        cfg = Configuration.load_config(ROOTDIR)
         lead_settings = {'Boston Vercise Directional': {'markerposition': 10.25, 'leadspacing': 2},
                          'St Jude 6172': {'markerposition': 9, 'leadspacing': 2},
                          'St Jude 6173': {'markerposition': 12, 'leadspacing': 3}}
 
-        all_marker = dict([(k, r) for k, r in single_lead.items() if k.startswith('marker')])
-        unit_vector = single_lead['normtraj_vector']  # see preprocLeadCT for further details
-#        marker_mm = np.round(all_marker['markers_head'] + [0, 0, offset] +
-#                             np.multiply(unit_vector, lead_settings[single_lead['model']]['markerposition'])* pixVal)
+        intensity, box, rot_contact_coordinates = [dict() for _ in range(3)]  # pre-allocate for later
+        estimated_markers = dict([(k, r) for k, r in single_lead.items() if k.startswith('marker')])
+        file_invMatrix = os.path.join(single_lead['filenameCTimaging'][0], 'CT2template_1InvWarpMatrix.mat')
 
-        marker_mm = np.round(all_marker['markers_head'] + [0, 0, offset] +
-                             np.multiply(lead_settings[single_lead['model']]['markerposition'], unit_vector))
-        print(marker_mm)
-        intensity, box, dir_level, intensity_adv, box_adv = [dict() for _ in range(5)]
-        intensity['marker'], box['marker'], _ = GetImaging.get_axialplanes(marker_mm, single_lead,
+        # Convert the markers to the imaging of the original data with the transformation matrix
+        marker_rawCT = dict()
+        for marker, coordinates in estimated_markers.items():
+            coords_temp = [int(round(c)) for c in coordinates]
+            transformed = LeadWorks.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
+                                                          to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
+            marker_rawCT[marker] = np.array(transformed['points'])  # use points to account for distances
+
+        unit_vector_rawCT = np.divide((marker_rawCT['markers_tail'] - marker_rawCT['markers_head']),
+                                      np.linalg.norm(marker_rawCT['markers_tail'] - marker_rawCT['markers_head']))
+        marker_raw_mm = np.round(marker_rawCT['markers_head'] + [0, 0, offset] +
+                                 np.multiply(lead_settings[single_lead['model']]['markerposition'], unit_vector_rawCT))
+        marker_raw = ants.transform_physical_point_to_index(CTimaging_orig, point=marker_raw_mm)
+
+        cfg = cfg['preprocess']['registration']
+        filenameCT = '/'.join(re.split(r".{}run[0-9].".format(cfg['prefix']),
+                                       os.path.join(*single_lead['filenameCTimaging'])))
+        intensity['marker'], box['marker'], _ = GetImaging.get_axialplanes(marker_raw, filenameCT, unit_vector_rawCT,
                                                                            window_size=extractradius)
-        intensity_adv['marker'], box_adv['marker'], _ = GetImaging.get_axialplanes_dot(marker_mm, single_lead,
-                                                                           window_size=extractradius)
+        marker_coordinates = marker_raw
+
+        # Loop through the directional leads in order to obtain all necessary coordinates
         for idx, l in enumerate(levels, start=1):
-            dir_level[l] = np.round(all_marker['markers_head'] + [0, 0, offset] +
-                                    np.multiply(unit_vector, idx * lead_settings[single_lead['model']]['leadspacing']))
-            intensity[l], box[l], _ = GetImaging.get_axialplanes(dir_level[l], single_lead, window_size=extractradius)
+            rot_contact_coordinates[l] = np.round(marker_rawCT['markers_head'] + [0, 0, offset] +
+                                                  np.multiply(unit_vector_rawCT,
+                                                              idx * lead_settings[single_lead['model']]['leadspacing']))
+            rot_contact_coordinates[l] = ants.transform_physical_point_to_index(CTimaging_orig,
+                                                                                point=rot_contact_coordinates[l])
+            intensity[l], box[l], _ = GetImaging.get_axialplanes(rot_contact_coordinates[l], filenameCT,
+                                                                 unit_vector_rawCT,
+                                                                 window_size=extractradius)
 
-        return intensity, box, dir_level
-
-    @staticmethod
-    def get_axialplanes(marker_coordinates, single_lead, window_size=10, resolution=.5, transformation_matrix=np.eye(4)):
-        """returns a plane at a specific window with a certain direction"""
-
-        bounding_box_coords = []
-        for k in range(2):
-            bounding_box_coords.append(np.arange(start=marker_coordinates[k]-window_size,
-                                                 stop=marker_coordinates[k]+window_size, step=resolution))
-        bounding_box_coords.append(np.repeat(marker_coordinates[-1], len(bounding_box_coords[1])))
-        bounding_box = np.array(bounding_box_coords)
-
-        meshX, meshY = np.meshgrid(bounding_box[0, :], bounding_box[1, :])
-        meshZ = np.repeat(bounding_box[-1,0], len(meshX.flatten()))
-        fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
-        fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
-        resampled_points = GetImaging.interpolate_CTintensities(single_lead, fitvolume)
-        imat = np.reshape(resampled_points, (meshX.shape[0], -1), order='F')
-
-        return imat, bounding_box, fitvolume
+        return intensity, box, marker_coordinates, rot_contact_coordinates
 
     @staticmethod
-    def get_axialplanes_dot(marker_coordinates, single_lead, window_size=10, resolution=.5, transformation_matrix=np.eye(4)):
-        """returns a plane at a specific window with a certain direction"""
+    def get_axialplanes(lead_point, imaging, unit_vector, window_size=10, res=.5, transformation_matrix=np.eye(4)):
+        """returns intensities at perpendicular plane to unit_vector (i.e. trajectory)"""
 
-        unit_vector = single_lead['normtraj_vector']
-        xvec_unrot = np.cross(unit_vector, [1, 0, 0])
-        #xvec_unrot = np.divide(xvec_unrot, np.linalg.norm(xvec_unrot))
-        d = np.dot(xvec_unrot, marker_coordinates)
+        perpendicular_vectors = {0: np.random.randn(3), 1: np.random.randn(3)}
+        for num, vec in perpendicular_vectors.items():
+            perpendicular_vectors[num] -= vec.dot(unit_vector) * unit_vector
+            perpendicular_vectors[num] /= np.linalg.norm(perpendicular_vectors[num])
 
-        bounding_box_coords = []
+        # xvec_unrot = np.cross(unit_vector, perpendicular_vectors[0])
+        # d = np.dot(xvec_unrot, marker_coordinates)
+        d = np.dot(unit_vector, lead_point)
+
+        coords_bb = []  # this is the bounding box for the coordinates to interpolate
         for k in range(3):
-            bounding_box_coords.append(np.arange(start=marker_coordinates[k]-window_size,
-                                                 stop=marker_coordinates[k]+window_size, step=resolution))
-        # bounding_box_coords.append(np.repeat(marker_coordinates[-1], len(bounding_box_coords[1])))
-        bounding_box = np.array(bounding_box_coords)
+            coords_bb.append(np.arange(start=lead_point[k] - window_size, stop=lead_point[k] + window_size, step=res))
+        bounding_box = np.array(coords_bb)
 
         meshX, meshY = np.meshgrid(bounding_box[0, :], bounding_box[1, :])
-        #meshZ = np.repeat(bounding_box[-1,0], len(meshX.flatten()))
-        meshZ = (d - xvec_unrot[0] * meshX - xvec_unrot[1] * meshY) / xvec_unrot[2]
+        meshZ = (d - unit_vector[0] * meshX - unit_vector[1] * meshY) / unit_vector[2]
 
         fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
         fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
-        resampled_points = GetImaging.interpolate_CTintensities(single_lead, fitvolume)
+        resampled_points = LeadWorks.interpolate_CTintensities(fitvolume, imaging, method='polygon')
         imat = np.reshape(resampled_points, (meshX.shape[0], -1), order='F')
 
-        from matplotlib import pyplot as plt
-        plt.figure()
-        plt.imshow(imat)
-
         return imat, bounding_box, fitvolume
-
-    @staticmethod
-    def resample_CTplanes(hd_trajectories, direction, single_lead, resolution=.2, sample_width=10, transformation_matrix=np.eye(4)):
-        """Function resampling intesities of the source imaging to a grid which is later used to visualise the
-        leads. [ea_mancor_updatescene lines 264f]"""
-
-        direction = ''.join(direction) if type(direction) == list else direction  # in case direction is entered as list
-
-        xvec = np.arange(start=-sample_width, stop=sample_width+resolution, step=resolution)
-        meanfitline = np.vstack((hd_trajectories.T, np.ones(shape=(1, hd_trajectories.T.shape[1])))) # needed for transformation
-        addvolume = np.tile(xvec,(len(meanfitline.T),1))
-
-        fitvolume = []
-        for t in range(4):
-            fitvolume.append(np.tile(meanfitline[t,:], xvec.shape).reshape(xvec.shape[0], meanfitline.shape[1]).T)
-        fitvolume_orig = np.stack(fitvolume)
-
-        if direction == 'cor':
-            fitvolume_orig[0,:,:] += addvolume
-        elif direction == 'sag':
-            fitvolume_orig[1, :, :] += addvolume
-        elif direction == 'tra':
-            fitvolume_orig[2, :, :] += addvolume
-
-        fitvolume = np.linalg.solve(transformation_matrix, np.reshape(fitvolume_orig, (4, -1), order='F'))
-        resampled_points = GetImaging.interpolate_CTintensities(single_lead, fitvolume)
-        imat = np.reshape(resampled_points, (meanfitline.shape[1], -1), order='F')
-
-        return imat, fitvolume_orig
-
-    @staticmethod
-    def interpolate_CTintensities(single_lead, fitvolume):
-        import SimpleITK as sitk
-
-        img = sitk.ReadImage(os.path.join(*single_lead['filenameCTimaging']))
-        physical_points = list(map(tuple, fitvolume[0:3, :].T))
-        # physical_points = physical_points[0:5]
-        num_samples = len(physical_points)
-        physical_points = [img.TransformContinuousIndexToPhysicalPoint(pnt) for pnt in physical_points]
-
-        # interp_grid_img = sitk.Image((len(physical_points) *([1] * (img.GetDimension() - 1))), sitk.sitkUInt8)
-        interp_grid_img = sitk.Image([num_samples] + [1] * (img.GetDimension() - 1), sitk.sitkUInt8)
-        displacement_img = sitk.Image([num_samples] + [1] * (img.GetDimension() - 1), sitk.sitkVectorFloat64,
-                                      img.GetDimension())
-
-        for i, pnt in enumerate(physical_points):
-            displacement_img[[i] + [0] * (img.GetDimension() - 1)] = np.array(pnt) - np.array(
-                interp_grid_img.TransformIndexToPhysicalPoint([i] + [0] * (img.GetDimension() - 1)))
-
-        interpolator_enum = sitk.sitkPolygon3 # sitk.sitkLinear
-        default_output_pixel_value = 0.0
-        output_pixel_type = sitk.sitkFloat32 if img.GetNumberOfComponentsPerPixel() == 1 else sitk.sitkVectorFloat32
-        resampled_temp = sitk.Resample(img, interp_grid_img, sitk.DisplacementFieldTransform(displacement_img),
-                                       interpolator_enum, default_output_pixel_value, output_pixel_type)
-
-        resampled_points = [resampled_temp[x, 0, 0] for x in range(resampled_temp.GetWidth())]
-        debug = False
-        if debug:
-            for i in range(resampled_temp.GetWidth()):
-                print(str(img.TransformPhysicalPointToContinuousIndex(physical_points[i])) + ': ' + str(
-                    resampled_temp[[i] + [0] * (img.GetDimension() - 1)]) + '\n')
-
-        return np.array(resampled_points)
 
     @staticmethod
     def orient_intensityprofile(artefact_slice, pixdim, radius=16, center=''):
         """estimates the intensities at the different angles aroud the artefact; all functions are derived from
         https://github.com/netstim/leaddbs/blob/master/ea_orient_intensityprofile.m"""
 
-        center = np.array([len(artefact_slice)/2, len(artefact_slice)/2]) if not center else center
+        center = np.array([len(artefact_slice) / 2, len(artefact_slice) / 2]) if not center else center
         vector = np.multiply([0, 1], radius / pixdim[-1])
         vector_updated, angle, intensity = [[] for _ in range(3)]
         for k in range(1, 361):
@@ -335,8 +279,9 @@ class GetImaging:
         https://github.com/netstim/leaddbs/blob/master/ea_orient_intensitypeaksFFT.m"""
 
         fft_intensities = scipy.fft(intensity)
-        fft_part = fft_intensities[noPeaks+2]  # TODO is it really necessary to add 1 in consideration of different indexing between Matlab and Python?
-        phase = math.asin(np.real(fft_part) / abs(fft_part))
+        fft_part = fft_intensities[
+            noPeaks]  # Reason for indexing is not quite clear here. results more accurate when not
+        phase = -math.asin(np.real(fft_part) / abs(fft_part))
 
         if np.imag(fft_part) > 0:
             phase = -math.pi - phase if np.real(fft_part) > 0 else math.pi - phase
@@ -347,9 +292,9 @@ class GetImaging:
         for k in range(1, 361):
             sprofil.append(amplitude * math.sin(np.deg2rad(noPeaks * k) - phase) + level)
 
-        [peak.append(x*360/noPeaks) for x in range(noPeaks)]
+        [peak.append(x * 360 / noPeaks) for x in range(noPeaks)]
 
-        no_iter = 360/noPeaks
+        no_iter = 360 / noPeaks
         for k in range(int(no_iter)):
             sum_intensity.append(np.sum([sprofil[int(i)] for i in peak]))
             peak = np.add(peak, 1)
@@ -357,7 +302,7 @@ class GetImaging:
         maxpeak = np.argmax(sum_intensity)
 
         for k in range(noPeaks):
-            peak[k] = maxpeak + k*360/noPeaks
+            peak[k] = maxpeak + k * 360 / noPeaks
 
         return peak, sprofil
 
@@ -367,7 +312,7 @@ class GetImaging:
         https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m (lines 474f.)"""
 
         sum_intensities, roll_values, dir_valleys = [{k: [] for k in intensities.keys()} for _ in range(3)]
-        rollangles = []
+        roll_angles = []
         for level, intensity in intensities.items():
             count = 0
             shift = []
@@ -379,18 +324,17 @@ class GetImaging:
                 temp = GetImaging.peaks_dir_marker(intensity, dir_angles)
                 sum_intensities[level].append(temp)
                 if level == list(intensities.keys())[0]:
-                    rollangles.append(rolltemp)
+                    roll_angles.append(rolltemp)
                 count += 1
 
         dir_angles = {k: [] for k in intensities.keys()}
         for level in intensities.keys():
             temp = np.argmin(sum_intensities[level])
-            roll_values[level] = rollangles[temp]
+            roll_values[level] = roll_angles[temp]
             dir_angles[level] = GetImaging.orient_artifact_at_level(roll_values[level], pitch, yaw, dir_level[level])
             dir_valleys[level] = np.round(np.rad2deg(dir_angles[level]) + 1)
             dir_valleys[level][dir_valleys[level] > 360] = dir_valleys[level][dir_valleys[level] > 360] - 360
-
-        return sum_intensities, roll_values, dir_valleys
+        return sum_intensities, roll_values, dir_valleys, roll_angles
 
     @staticmethod
     def peaks_dir_marker(intensity, angles):
@@ -399,7 +343,6 @@ class GetImaging:
 
         intensities = np.array(intensity)
         peak = np.round(np.rad2deg(angles))
-        # peak[peak<1] = peak[peak<1] + 360
         peak[peak > 359] = peak[peak > 359] - 359
         idx_peaks = [int(x) for x in peak]
 
@@ -444,9 +387,9 @@ class GetImaging:
 
         dir_angles.extend(np.add(dir_angles, math.pi))
         dir_angles = np.asarray(dir_angles, dtype=np.float32)
-        dir_angles[dir_angles > 2*math.pi] = dir_angles[dir_angles > 2 * math.pi] - 2 * math.pi
+        dir_angles[dir_angles > 2 * math.pi] = dir_angles[dir_angles > 2 * math.pi] - 2 * math.pi
         dir_angles[dir_angles < 0] = dir_angles[dir_angles < 0] + 2 * math.pi
-        dir_angles = np.sort(2 * math.pi-dir_angles)
+        dir_angles = np.sort(2 * math.pi - dir_angles)
 
         return dir_angles
 
