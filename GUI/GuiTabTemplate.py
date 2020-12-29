@@ -12,6 +12,7 @@ from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
 import private.allToolTips as setToolTips
 
+# TODO: 1.) create ToolTips for the entire script, 2.) Modify contents as needed
 
 class GuiTabTemplate(QWidget):
     """General tab which enables import of DICOM files but also a set of distinct options such as viewing the
@@ -46,8 +47,9 @@ class GuiTabTemplate(QWidget):
         self.HBoxUpperLeftTab.addWidget(self.dirTemplates)
 
         self.btnChangeWdir = QPushButton('Change working directory')
-        self.btnChangeWdir.setToolTip(setToolTips.ChangeWdirDICOM())
-        self.btnChangeWdir.clicked.connect(self.change_wdir)
+        self.btnChangeWdir.setDisabled(True)
+        # self.btnChangeWdir.setToolTip(setToolTips.ChangeWdirDICOM())
+        # self.btnChangeWdir.clicked.connect(self.change_wdir)
 
         self.btnReloadFilesTab = QPushButton('Reload files')
         self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
@@ -77,14 +79,14 @@ class GuiTabTemplate(QWidget):
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
         self.HBoxUpperRightTab = QVBoxLayout(self.listbox)
-        self.availableNiftiTab = QListWidget()
-        self.availableNiftiTab.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.availableNiftiTab.itemSelectionChanged.connect(self.change_list_item)
+        self.availableTemplates = QListWidget()
+        self.availableTemplates.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.availableTemplates.itemSelectionChanged.connect(self.change_list_item)
         itemsTab = set([name for name in os.listdir(self.wdirTemplate)
                         if os.path.isdir(os.path.join(self.wdirTemplate, name))])
 
-        self.add_available_templates(self.availableNiftiTab, itemsTab)
-        self.HBoxUpperRightTab.addWidget(self.availableNiftiTab)
+        self.add_available_templates(self.availableTemplates, itemsTab)
+        self.HBoxUpperRightTab.addWidget(self.availableTemplates)
 
         # Combine all Boxes for General Tab Layout
         self.LeftboxTab = QGroupBox()
@@ -107,28 +109,30 @@ class GuiTabTemplate(QWidget):
         self.dirTemplates.setText('wDIR: {}'.format(self.niftidir))
         self.cfg['folders']['nifti'] = self.niftidir
 
-        self.availableNiftiTab.clear()
+        self.availableTemplates.clear()
         itemsChanged = FileOperations.list_folders(self.niftidir, self.cfg['folders']['prefix'])
-        self.add_available_templates(self.availableNiftiTab, itemsChanged)
+        self.add_available_templates(self.availableTemplates, itemsChanged)
 
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
 
         self.cfg = Configuration.load_config(self.cfg['folders']['rootdir'])
-        self.availableNiftiTab.clear()
-        itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
-        self.add_available_templates(self.availableNiftiTab, itemsChanged)
+        self.availableTemplates.clear()
+        itemsChanged = set([name for name in os.listdir(self.wdirTemplate)
+                        if os.path.isdir(os.path.join(self.wdirTemplate, name))])
+        # itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
+        self.add_available_templates(self.availableTemplates, itemsChanged)
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is
          coded in a way that the sender is identified"""
 
-        if self.sender() == self.availableNiftiTab:
-            items = self.availableNiftiTab.selectedItems()
+        if self.sender() == self.availableTemplates:
+            items = self.availableTemplates.selectedItems()
             self.selected_subj_Gen = []
 
             for i in range(len(items)):
-                self.selected_subj_Gen.append(str(self.availableNiftiTab.selectedItems()[i].text()))
+                self.selected_subj_Gen.append(str(self.availableTemplates.selectedItems()[i].text()))
 
     def add_available_templates(self, sending_list, items, msg="yes"):
         """adds the available subjects in the working directory into the items list;
