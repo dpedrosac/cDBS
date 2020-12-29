@@ -3,10 +3,11 @@
 
 import os
 import sys
+import re
 
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
-    QFileDialog, QPushButton, QMainWindow, QListWidget
+    QPushButton, QMainWindow, QListWidget
 
 import private.allToolTips as setToolTips
 from dependencies import ROOTDIR
@@ -128,6 +129,7 @@ class ContentGuiDCM2Nii(QWidget):
         try:
             self.mInput.clear()
             items = FileOperations.list_folders(inputdir=self.cfg['folders']['dicom'], prefix='', files2lookfor='')
+            items = self.check_for_complete_input(list(items))
             self.add_available_subj(items)
         except FileExistsError:
             print('{} without any valid files/folders, continuing ...'.format(self.dicomdir))
@@ -135,12 +137,30 @@ class ContentGuiDCM2Nii(QWidget):
         self.update_buttons_status()
         self.connections()
 
+    def check_for_complete_input(self, item_list, modalities = ['CT', 'MRI']):
+        """this function ensures, that only those subjects are displayed where MRI and CT data is available in the
+        correct folders (surname_nameMRI or surname_nameCT)"""
+
+        available_subjects = set([re.split(r'CT|MRI', x)[0] for x in list(item_list)])
+        item_list_complete = []
+        [item_list_complete.append(subj) for subj in list(available_subjects) if
+         all([os.path.isdir(os.path.join(self.dicomdir, subj + y)) for y in modalities])]
+
+        if len(available_subjects) != len(item_list_complete):
+            incomplete = list(set(available_subjects) - set(item_list_complete))
+            Output.msg_box(text="There is incomplete data or directories have unknown names. Please ensure the presence"
+                                " of two folders (surname_nameCT) and (surname_nameMRI) for:"
+                                "\n{}".format(''.join(' -> {}\n'.format(c) for c in incomplete)),
+                           title="Incomplete data")
+        return set(item_list_complete)
+
     def add_available_subj(self, items):
         """adds available subjects in the cwd to item list; PyQT5 dialog is opened if none available"""
 
         if len(items) == 0:
-            buttonReply = QMessageBox.question(self, 'No files in the DICOM directory', 'No subjects available in the'
-                                               'CWD: {}. Do you want to change to different one?'.format(self.dicomdir),
+            buttonReply = QMessageBox.question(self, 'No files in the DICOM directory',
+                                               'No subjects available in the CWD: {}. '
+                                               'Do you want to change to different one?'.format(self.dicomdir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_dicomdir()

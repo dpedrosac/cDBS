@@ -41,7 +41,6 @@ sales_list = ["North American Sales", "EU Sales", "Japan Sales", "Other Sales",	
 
 
 # ------------------------- Plotting part  ------------------------- #
-
 def prepare_imshow(data, valleys, vector, xy_box, point_of_interest, title='Marker',
                    width=width_subplot, height=height_subplot, color_scale='ice', clims=(-50, 100), radius=20):
     """ this part plots the intensities of the marker and the different levels at which rotation is estimated"""
@@ -94,6 +93,7 @@ def prepare_imshow(data, valleys, vector, xy_box, point_of_interest, title='Mark
 
     return dcc.Graph(id='{}-rotation'.format(title).lower(), figure=fig_left)
 
+
 def plot_marker_intensities(intensities, markerfft, peaks, valleys, id, width=width_subplot, height=height_subplot):
     """ intensity of of the data at the 360 degrees around the marker"""
 
@@ -126,6 +126,7 @@ def plot_marker_intensities(intensities, markerfft, peaks, valleys, id, width=wi
 
     return dcc.Graph(id=id, figure=fig)
 
+
 def plot_level_intensities(intensities, valleys, id, width=width_subplot, height=height_subplot):
     """ intensity of of the data at the 360 degrees around the marker"""
 
@@ -148,6 +149,7 @@ def plot_level_intensities(intensities, valleys, id, width=width_subplot, height
                       width=width, height=height)
 
     return dcc.Graph(id=id, figure=fig_middle)
+
 
 def plot_similarity(rollangles, roll_values, sum_intensity, level, id, width=width_subplot, height=height_subplot):
     """plots the similarities ??"""
@@ -174,8 +176,8 @@ def plot_similarity(rollangles, roll_values, sum_intensity, level, id, width=wid
                       margin=dict(l=20, r=20, t=45, b=10), paper_bgcolor='white', plot_bgcolor='white',
                       width=width, height=height)
 
-
     return dcc.Graph(id=id, figure=fig_right)
+
 
 def add_arrow_buttons(level):
     """adds two buttons intended to drive the display of the intensities on the left side in both z-directions"""

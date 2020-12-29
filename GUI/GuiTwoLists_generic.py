@@ -1,31 +1,29 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import glob
 import os
 import sys
 
-import utils.HelperFunctions as HF
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging
-from utils.settingsDCM2NII import GuiSettingsDCM2NII
-from utils import preprocDCM2NII
-import private.allToolTips as setToolTips
-import glob
-from dependencies import ROOTDIR
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QMainWindow, QListWidget
+
+import private.allToolTips as setToolTips
+from dependencies import ROOTDIR
+from utils import preprocDCM2NII
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging
+from utils.settingsDCM2NII import GuiSettingsDCM2NII
 
 
 class TwoListGUI(QMainWindow):
     """ This is a GUI which aims at selecting the folders/subjects of which will be transformed using one of the
     available options. It allows batch processing of data and in some cases changing the settings"""
 
-    def __init__(self, working_directory='', option_gui='dcm2niix', _title='', parent=None):
+    def __init__(self, working_directory='', option_gui='dcm2niix', title='', parent=None):
         super().__init__(parent)
 
-        if not _title:
-            title = 'Two list GUI for further processing data'
-
+        title = 'Two list GUI for further processing data' if not title else title
         self.setFixedSize(900, 600)
         self.setWindowTitle(title)
         self.table_widget = ContentTwoListGUI(working_directory, option_gui)
@@ -42,31 +40,29 @@ class ContentTwoListGUI(QWidget):
 
         # ============================    Different options available   ============================
         if self.option_gui == 'dcm2niix':
-            if os.path.isdir(self.cfg["folders"]["dicom"]):
-                self.working_dir = self.cfg["folders"]["dicom"]
-            else:
-                self.working_dir = os.getcwd()
-
+            working_dir = self.cfg['folders']['dicom']
+            self.working_dir = working_dir if os.path.isdir(working_dir) else os.getcwd()
             options = {'folderbox_title': "Directory (DICOM-files)",
-                       'str_labelDir':'DICOM DIR: {}'.format(self.working_dir),
+                       'str_labelDir': 'DICOM DIR: {}'.format(self.working_dir),
                        'runBTN_label': 'Run processing'}
 
-        elif self.option_gui == "displayNiftiFiles":
+        elif self.option_gui == 'displayNiftiFiles':
             if not working_directory:
-                Output.msg_box(text='Please provide a valid folder. Terminating this GUI.', title='No folder provided')
+                Output.msg_box(text="Please provide a valid folder. Terminating this GUI.", title="No folder provided")
                 self.close()
                 return
             else:
                 self.working_dir = working_directory
             options = {'folderbox_title': "Directory (nifti-files)",
-                       'str_labelDir':'subjects\' DIR: {}'.format(self.working_dir),
+                       'str_labelDir': 'subjects\' DIR: {}'.format(self.working_dir),
                        'runBTN_label': 'View files'}
         else:
-            Output.msg_box(text='Please provide a valid option such as "dcm2niix" or "displayNiftiFiles". '
-                                          'Terminating the GUI', title='Wrong input as option')
+            Output.msg_box(text="Please provide a valid option such as 'dcm2niix' or 'displayNiftiFiles'. "
+                                "Terminating the GUI", title="Wrong input as option")
             self.close()
             return
 
+        # ============================    Start creating layout   ============================
         # Create general layout
         self.tot_layout = QVBoxLayout(self)
         self.mid_layout = QHBoxLayout(self)
@@ -80,14 +76,14 @@ class ContentTwoListGUI(QWidget):
         self.btn_workingdir = QPushButton('Change working \ndirectory')
         self.btn_workingdir.setFixedSize(150, 40)
         self.btn_workingdir.setDisabled(True)
-        if self.option_gui == "dcm2niix":
+        if self.option_gui == 'dcm2niix':
             self.btn_workingdir.setEnabled(True)
         self.btn_workingdir.clicked.connect(self.change_workingdir)
 
         self.btn_savedir = QPushButton('Save directory \nto config file')
         self.btn_savedir.setFixedSize(150, 40)
         self.btn_savedir.setDisabled(True)
-        if self.option_gui == "dcm2niix":
+        if self.option_gui == 'dcm2niix':
             self.btn_savedir.setEnabled(True)
             self.btn_savedir.setToolTip(Output.split_lines(setToolTips.saveDirButton()))
         self.btn_savedir.clicked.connect(self.save_cfg_dicomdir)
@@ -137,11 +133,11 @@ class ContentTwoListGUI(QWidget):
         self.btn_preferences = QPushButton("Preferences")
         self.btn_preferences.setDisabled(True)
         self.btn_preferences.clicked.connect(self.settings_show)
-        if self.option_gui == "dcm2niix":
+        if self.option_gui == 'dcm2niix':
             self.btn_preferences.setEnabled(True)
 
         self.btn_run_command = QPushButton(options["runBTN_label"])
-        if self.option_gui == "dcm2niix":
+        if self.option_gui == 'dcm2niix':
             self.btn_run_command.setToolTip(setToolTips.run_dcm2niix())
         else:
             self.btn_run_command.setToolTip(setToolTips.run_CheckRegistration())
@@ -176,7 +172,6 @@ class ContentTwoListGUI(QWidget):
         self.update_buttons_status()
         self.connections()
 
-
     def addAvailableItems(self, items):
         """adds the available Items in the directory to read from into list; error message is dropped if 0 available"""
 
@@ -201,16 +196,16 @@ class ContentTwoListGUI(QWidget):
 
         items = FileOperations.list_folders(self.working_dir, prefix='')
         self.addAvailableItems(items)
-        if self.option_gui == "dcm2niix":
-            self.cfg["folders"]["dicom"] = self.working_dir
-            Configuration.save_config(self.cfg["folders"]["rootdir"], self.cfg)
+        if self.option_gui == 'dcm2niix':
+            self.cfg['folders']['dicom'] = self.working_dir
+            Configuration.save_config(self.cfg['folders']["rootdir"], self.cfg)
 
     def save_cfg_dicomdir(self):
         """Function intended to save the DICOM directory once button is pressed"""
-        self.cfg["folders"]["dicom"] = self.working_dir
-        Configuration.LittleHelpers.save_config(self.cfg["folders"]["rootdir"], self.cfg)
-        Configuration.LittleHelpers.msg_box(text="Folder changed in the configuration file to {}".format(self.working_dir),
-                                 title='Changed folder')
+        self.cfg['folders']['dicom'] = self.working_dir
+        Configuration.save_config(self.cfg['folders']["rootdir"], self.cfg)
+        Output.msg_box(text="Folder changed in the configuration file to {}".format(self.working_dir),
+                       title='Changed folder')
 
     def settings_show(self):
         """Opens a new GUI in which the settings for the transformation con be changed and saved to config file"""
@@ -221,21 +216,19 @@ class ContentTwoListGUI(QWidget):
         """starts the process linked to the module selected; that is in case of dcm2nii it runs the extraction of nifti-
         files from the DICOM folder or in case of displayN4corr it displays all nifti files available in the folder"""
 
-        input = []
-        [input.append(self.mOutput.item(x).text()) for x in range(self.mOutput.count())]
+        input2process = []
+        [input2process.append(self.mOutput.item(x).text()) for x in range(self.mOutput.count())]
 
-        if not input:
-            OUtput.msg_box(text="At least one folder with data must be selected!",
-                                     title='No directory selected')
-        elif len(input) != 0 and self.option_gui == "dcm2niix":
-            print('in total, {} folders were selected'.format(len(input)))
-            preprocDCM2NII.PreprocessDCM(input)
-        elif len(input) != 0 and self.option_gui == "displayNiftiFiles":
+        if not input2process:
+            Output.msg_box(text="At least one folder with data must be selected!",
+                           title='No directory selected')
+        elif len(input2process) != 0 and self.option_gui == 'dcm2niix':
+            print('in total, {} folders were selected'.format(len(input2process)))
+            preprocDCM2NII.PreprocessDCM(input2process)
+        elif len(input2process) != 0 and self.option_gui == 'displayNiftiFiles':
             input_with_path = []
-            [input_with_path.extend(glob.glob(self.working_dir + '/**/' + x, recursive=True)) for x in input]
-
-            viewer = 'itk-snap'  # to-date, only one viewer is available. May be changed in a future
-            Imaging.load_imageviewer(viewer, input_with_path)
+            [input_with_path.extend(glob.glob(self.working_dir + '/**/' + x, recursive=True)) for x in input2process]
+            Imaging.load_imageviewer('itk-snap', input_with_path)  # to-date, only itk-snap available. could be changed
 
     @QtCore.pyqtSlot()
     def update_buttons_status(self):

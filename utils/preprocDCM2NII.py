@@ -18,6 +18,9 @@ class PreprocessDCM:
     """in this class a functions are defined which aim at extracting data from DICOM files to nifti images and for basic
     work on these"""
 
+    # TODO the following problem need to be addressed: 1) the way the DICOM folders are detected is somewhat
+    #  arbitrary (=hard-coded, cf. line 99f.) this needs a fix
+
     def __init__(self, _folderlist):
         self.logfile = True
         self.cfg = Configuration.load_config(ROOTDIR)
@@ -94,13 +97,13 @@ class PreprocessDCM:
             status.put((name_subj, mod, no_subj, total_subj))
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
             input_folder_files = [f.path for f in os.scandir(input_folder_name)
-                                  if (f.is_dir() and ('100' in f.path or '001' in f.path))]
+                                  if (f.is_dir() and ('100' in f.path or '001' in f.path or 'DICOM' in f.path))]
 
             orig_stdout = sys.stdout
             sys.stdout = open(log_filename, 'w')
             for folder in input_folder_files:
                 subprocess.call([dcm2niix_bin,
-                                 '-a', 'y', # anonimisation of DICOM data
+                                 '-a', 'y',  # anonimisation of DICOM data
                                  '-b', self.cfg['preprocess']['dcm2nii']['BIDSsidecar'][0],
                                  '-z', self.cfg['preprocess']['dcm2nii']['OutputCompression'][0],
                                  '-f', self.cfg['preprocess']['dcm2nii']['OutputFileStruct'],
@@ -213,7 +216,7 @@ class PreprocessDCM:
                                                                    os.path.isdir(os.path.join(niftidir, subdir)) and
                                                                    len(os.listdir(os.path.join(niftidir, subdir))) > 0)]
         try:
-            all_endings = [int(re.search(r'(' + prefix + ')(\w+)', x).group(2)) for x in list_dirs]
+            all_endings = [int(re.search(r'({})(\w+)'.format(prefix), x).group(2)) for x in list_dirs]
             idx = 0 if not all_endings else sorted(all_endings)[-1]
         except ValueError:
             idx = 0
