@@ -1,11 +1,11 @@
 ---
 folders:
-  dicom: /media/storage/cDBS/data/DICOM
-  nifti: /media/storage/cDBS/data/NIFTI
+  dicom: /Users/Bugrahan/PycharmProjects/cDBS/data/DICOM
+  nifti: /Users/Bugrahan/PycharmProjects/cDBS/data/nifti
   path2itksnap: ''
   path2slicer: ''
   prefix: subj
-  rootdir: /media/storage/cDBS
+  rootdir: /Users/Bugrahan/PycharmProjects/cDBS
 lead_detection:
   PaCER:
     detection_method: contactAreaCenter

@@ -28,7 +28,7 @@ class BiasCorrection:
 
         print('\nDebiasing imaging of {} subject(s)'.format(len(subjects)))
         allfiles = FileOperations.get_filelist_as_tuple(inputdir=self.cfg['folders']['nifti'], subjects=subjects)
-        strings2exclude = ['CT', self.cfg['preprocess']['ANTsN4']['prefix'], 'reg_run', 'Mask']
+        strings2exclude = ['CT', self.cfg['preprocess']['ANTsN4']['prefix'], 'reg_run', 'Mask', 'Warp', 'Registration']
 
         allfiles = [x for x in allfiles if x[0].endswith('.nii') and not
         any(re.search(r'\w+(?!_).({})|^({})\w+.'.format(z, z), os.path.basename(x[0]), re.IGNORECASE)

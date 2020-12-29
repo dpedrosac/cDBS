@@ -100,6 +100,7 @@ class PreprocessDCM:
             sys.stdout = open(log_filename, 'w')
             for folder in input_folder_files:
                 subprocess.call([dcm2niix_bin,
+                                 '-a', 'y', # anonimisation of DICOM data
                                  '-b', self.cfg['preprocess']['dcm2nii']['BIDSsidecar'][0],
                                  '-z', self.cfg['preprocess']['dcm2nii']['OutputCompression'][0],
                                  '-f', self.cfg['preprocess']['dcm2nii']['OutputFileStruct'],
