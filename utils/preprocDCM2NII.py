@@ -96,8 +96,12 @@ class PreprocessDCM:
         for mod in modalities:
             status.put((name_subj, mod, no_subj, total_subj))
             input_folder_name = os.path.join(self.inputdir, name_subj + mod)
-            input_folder_files = [f.path for f in os.scandir(input_folder_name)
-                                  if (f.is_dir() and ('100' in f.path or 'DICOM' in f.path or '001' in f.path))]
+            # input_folder_files = [f.path for f in os.scandir(input_folder_name)
+            #                       if (f.is_dir() and ('100' in f.path or 'DICOM' in f.path or '001' in f.path))]
+            input_folder_files = []
+            [input_folder_files.append(item) for item in os.listdir(input_folder_name)
+             if (os.path.isdir(os.path.join(input_folder_name, item)) and
+                 ('100' in item or 'DICOM' in item or '001' in item))]
 
             orig_stdout = sys.stdout
             sys.stdout = open(log_filename, 'w')

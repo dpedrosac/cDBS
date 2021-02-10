@@ -16,9 +16,9 @@ from matplotlib import pyplot as plt
 from scipy import ndimage
 from skimage.measure import regionprops
 from sklearn.decomposition import PCA
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 
 from dependencies import ROOTDIR
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 
 
 class LeadWorks:

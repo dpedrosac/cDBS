@@ -144,6 +144,26 @@ class Configuration:
             yaml.safe_dump(cfg, settings_mod, default_flow_style=False,
                            explicit_start=True, allow_unicode=True, encoding='utf-8')
 
+    @staticmethod
+    def rotation_dict():
+        """ empty dictionary with all values saved in the preprocLeadCT.py script and used for visualisation """
+
+        rotation = {'peak': [],
+                    'coordinates': [],
+                    'slices': [],
+                    'plot_box': [],
+                    'intensities': [],
+                    'sum_intensities': [],
+                    'valleys': [],
+                    'roll': [],
+                    'pitch': [],
+                    'yaw': [],
+                    'markerfft': [],
+                    'vector': [],
+                    'roll_angles': [],
+                    'angle': []}
+
+        return rotation
 
 class Imaging:
     def __init__(self, _debug=False):
@@ -377,6 +397,7 @@ class FileOperations:
             Configuration.save_config(ROOTDIR, cfg)
 
         return selected_directory
+
 
 class LeadWorks:
     def __init__(self, _debug=False):
