@@ -12,19 +12,18 @@ from itertools import groupby
 from operator import itemgetter
 import ants
 
-import scipy
 import numpy as np
 import yaml
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QFileDialog
 from mat4py import loadmat
 
-import private.CheckDefaultFolders as LocationCheck
 from dependencies import ROOTDIR, GITHUB
 
 
 class LittleHelpers:
     def __init__(self, _debug=False):
         self.debug = _debug
+
 
 class Output:
     def __init__(self, _debug=False):
@@ -152,6 +151,7 @@ class Configuration:
                     'coordinates': [],
                     'slices': [],
                     'plot_box': [],
+                    'fitvolumes': [],
                     'intensities': [],
                     'sum_intensities': [],
                     'valleys': [],
@@ -165,6 +165,38 @@ class Configuration:
 
         return rotation
 
+    @staticmethod
+    def rotation_dict_mod(lead='Boston Vercise Directional', levels=['marker', 'level1', 'level2']):
+        """ empty dictionary with all values saved in the preprocLeadCT.py script and used for visualisation """
+
+        rotation = dict()
+        if lead == 'Boston Vercise Directional':
+            content_per_level = ['coordinates',
+                                 'slices',
+                                 'plot_box',
+                                 'fitvolumes',
+                                 'intensities',
+                                 'sum_intensities',
+                                 'valleys',
+                                 'roll',
+                                 'vector']
+
+            for idx in content_per_level:
+                rotation[idx] = {k: [] for k in levels}
+
+            content_once = ['peak',
+                            'pitch',
+                            'yaw',
+                            'markerfft',
+                            'roll_angles',
+                            'angle']
+
+            for idx in content_once:
+                rotation[idx] = []
+
+        return rotation
+
+
 class Imaging:
     def __init__(self, _debug=False):
         self.debug = _debug
@@ -172,15 +204,14 @@ class Imaging:
     @staticmethod
     def set_viewer(viewer_opt):
         """Sets the viewer_option in the configuration file"""
-        from dependencies import ROOTDIR
 
         cfg = Configuration.load_config(ROOTDIR)
         if viewer_opt == 'itk-snap':  # to-date, only one viewer is available. May be changed in a future
-            if not cfg["folders"]["path2itksnap"]:
-                cfg["folders"]["path2itksnap"] = LocationCheck.FileLocation.itk_snap_check(ROOTDIR)
+            if not cfg['folders']['path2itksnap']:
+                cfg['folders']['path2itksnap'] = FileLocation.itk_snap_check()
                 Configuration.save_config(ROOTDIR, cfg)
 
-        return cfg["folders"]["path2itksnap"]
+        return cfg['folders']['path2itksnap']
 
     @staticmethod
     def load_imageviewer(path2viewer, file_names, suffix=''):
@@ -535,7 +566,6 @@ class LeadWorks:
         return np.array(resampled_points)
 
 
-
 class MatlabEquivalent:
     def __init__(self, _debug=False):
         self.debug = _debug
@@ -555,3 +585,32 @@ class MatlabEquivalent:
         result[1:] = result[1:] - cumulative_sum[1:]
 
         return result
+
+
+class FileLocation:
+    """in this class, the default folders for the additional toolboxes can be stored. This is optional and aims at
+    providing default locations in which the program can be searched to avoid manual selection"""
+
+    @staticmethod
+    def itk_snap_check(rootdir=''):
+        """checks for common folders in different platforms in which ITK-snap may be saved. """
+
+        rootdir = ROOTDIR if not rootdir else rootdir
+        platform = sys.platform
+        cfg = Configuration.load_config(ROOTDIR)         # TODO: include the version stored in dependencies.py
+        if not cfg['folders']['path2itksnap']:
+            if platform == 'linux':
+                default_folders = ["/etc/bin/", "/usr/lib/snap-3.6.0", "/usr/lib/snap-3.6.0/ITK-SNAP",
+                                   os.path.join(rootdir, 'ext', 'snap-3.6.0')]
+            elif platform == 'macos' or platform == 'darwin':
+                default_folders = ['/Applications/ITK-SNAP.app/']
+
+            try:
+                folder = [folder_id for folder_id in default_folders if os.path.isfile(os.path.join(folder_id, "ITK-SNAP"))]
+            except KeyError:
+                folder = QFileDialog.getExistingDirectory('Please indicate location of ITK-SNAP.')
+        else:
+            folder = cfg['folders']['path2itksnap']
+        # Here a dialog is needed in case folder has many flags to folders with itk-snap
+
+        return folder[0]

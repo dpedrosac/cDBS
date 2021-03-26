@@ -395,16 +395,10 @@ def intensity_plotting(value):
                                             peaks=np.array(value['peak']))
         for level in level_intensities.keys():
             level_intensities[level] = plot_intensities(np.array(value['intensities'][level]),
-                                                       np.array(value['valleys'][level]),
-                                                       title_id='intensity-profile-{}'.format(level))
+                                                        np.array(value['valleys'][level]),
+                                                        title_id='intensity-profile-{}'.format(level))
 
-        #level1_intensities = plot_intensities(np.array(value['intensities']['level1']),
-        #                                      np.array(value['valleys']['level1']),
-        #                                      title_id='intensity-profile-level1')
-        #level2_intensities = plot_intensities(np.array(value['intensities']['level2']),
-        #                                      np.array(value['valleys']['level2']),
-        #                                      title_id='intensity-profile-level2')
-
+    print('these are the items in rotation: {}'.format(value.keys()))
     return marker_intensity, level_intensities['level1'], level_intensities['level2']
 
 

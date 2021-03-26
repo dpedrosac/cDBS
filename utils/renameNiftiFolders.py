@@ -19,7 +19,7 @@ class RenameFolderNames(QWidget):
 
     def __init__(self, parent=None):
         super(QWidget, self).__init__(parent)
-        self.setFixedSize(600, 250)
+        self.setFixedSize(600, 150)
         self.setWindowTitle("Batch convert subjects' folder names")
         self.show()
 
@@ -30,7 +30,7 @@ class RenameFolderNames(QWidget):
             self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
         Configuration.save_config(ROOTDIR, self.cfg)
 
-        # Create general layout
+        # General layout for the tab view and initialisation of tabs
         self.layout = QVBoxLayout(self)
         self.BottomButtons = QHBoxLayout()
         self.GroupBox1 = QGroupBox("Change prefix of folders:")
@@ -51,6 +51,7 @@ class RenameFolderNames(QWidget):
 
         self.btnOK = QPushButton('OK')
         self.btnOK.clicked.connect(self.on_OKBtn_clicked)
+
         self.btnCancel = QPushButton('Cancel')
         self.btnCancel.clicked.connect(self.close)
         self.BottomButtons.addStretch()
@@ -65,6 +66,7 @@ class RenameFolderNames(QWidget):
     def on_OKBtn_clicked(self):
         prefix = self.cfg['folders']['prefix']
         new_prefix = self.lineEditChangedPrefix.text()
+
         if not new_prefix:
             Output.msgBox(text="No prefix was entered!", title="Warning")
         elif new_prefix.endswith('_') or new_prefix.endswith('.'):

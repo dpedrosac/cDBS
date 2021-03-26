@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QFileDialog, QPushButton, QListWidget, QAbstractItemView
 
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
+from utils.HelperFunctions import Output, Configuration, FileOperations
 from GUI.GUIdcm2nii import MainGuiDcm2nii
 from utils.renameNiftiFolders import RenameFolderNames
 from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
 import private.allToolTips as setToolTips
+
 
 class GuiTabGeneral(QWidget):
     """General tab which enables import of DICOM files but also a set of distinct options such as viewing the
@@ -27,7 +27,7 @@ class GuiTabGeneral(QWidget):
             self.niftidir = self.cfg['folders']['nifti']
         else:
             self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti', init=True)
-        self.cfg['folders']['rootdir'] = ROOTDIR
+        # self.cfg['folders']['rootdir'] = ROOTDIR  ## changed 2021/02/23
         Configuration.save_config(ROOTDIR, self.cfg)
 
         self.lay = QHBoxLayout(self)
@@ -117,7 +117,7 @@ class GuiTabGeneral(QWidget):
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
 
-        self.cfg = Configuration.load_config(self.cfg['folders']['rootdir'])
+        self.cfg = Configuration.load_config(ROOTDIR)
         self.availableNiftiTab.clear()
         itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
         self.add_available_items(self.availableNiftiTab, itemsChanged)
@@ -137,15 +137,15 @@ class GuiTabGeneral(QWidget):
         """adds the available subjects in the working directory into the items list;
         an error message is dropped if none available"""
         if len(items) == 0 and msg == "yes":
-            buttonReply = QMessageBox.question(self, "No files in dir", "There are no subjects available "
-                                               "in the current working directory ({}). Do you want to "
-                                               " change to a different one?".format(self.niftidir),
+            buttonReply = QMessageBox.question(self, "No files in dir", "There are no subjects available in the "
+                                                                        "working directory ({}). Change to different "
+                                                                        "one?".format(self.niftidir),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
                 self.change_wdir()
         else:
             items = list(items)
-            items.sort(key=lambda fname: int(fname.split(self.cfg['folders']['prefix'])[1]))
+            items.sort(key=lambda folder_name: int(folder_name.split(self.cfg['folders']['prefix'])[1]))
             sending_list.addItems(items)
 
     def openDetails(self):
@@ -157,11 +157,11 @@ class GuiTabGeneral(QWidget):
             if sys.platform == 'linux':
                 subprocess.Popen(['xdg-open', ''.join(fileName)])
             else:
-                #['open', ''.join(fileName)] # TODO: implement xdg-open in macos and put the command in the install routine
-                os.system('open"%s"'%fileName)
+                os.system('open"%s"' % fileName)
                 subprocess.run(['open', fileName], check=True)
         else:
-            Output.msg_box(text="Subject details are not available!", title="Detail file not found")
+            Output.msg_box(text="Subject details unavailable, creating empty csv-file!", title="Detail file not found")
+            subprocess.call(['touch', '{}subjdetails.csv'.format(self.cfg['folders']['nifti'])])
 
     def run_rename_folders(self):
         """Renames all folders with a similar prefix; After that manual reloading is necessary"""
@@ -175,7 +175,7 @@ class GuiTabGeneral(QWidget):
 
         if not self.selected_subj_Gen:
             Output.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
-                       title="No subject selected")
+                           title="No subject selected")
             return
         elif len(self.selected_subj_Gen) > 1:
             Output.msg_box(text="Please select only one folder to avoid excessive image load",
@@ -189,8 +189,11 @@ class GuiTabGeneral(QWidget):
 
     def run_DCM2NII(self):
         """wrapper to start the GUI which enables to batch preprocess DICOM dolers and convert them to NIFTI files"""
-        self.convertFiles = MainGuiDcm2nii()
-        self.convertFiles.show()
+
+        # self.convertFiles = MainGuiDcm2nii() # 2021/02/23 not sure if this works without reference to GUI
+        # self.convertFiles.show()
+        convertFiles2nifti = MainGuiDcm2nii()
+        convertFiles2nifti.show()
 
 
 if __name__ == '__main__':

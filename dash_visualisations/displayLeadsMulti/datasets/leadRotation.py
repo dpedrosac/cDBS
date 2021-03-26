@@ -7,25 +7,253 @@ import os
 import re
 import sys
 import warnings
-from pathlib import Path
 
 import ants
 import numpy as np
 import scipy
 
-print(str(Path('.').absolute().parent))
-sys.path.append('/media/storage/cDBS') # TODO: there must be a more elegant way to "not" hard code this but use ROOTDIR
+sys.path.append('/media/storage/cDBS')  # TODO: there must be a more elegant way to "not" hard code this but use ROOTDIR
 from utils.HelperFunctions import Configuration, LeadWorks
-from dependencies import ROOTDIR
+from dependencies import ROOTDIR, lead_settings
+cfg = Configuration.load_config(ROOTDIR)
+
+# from dash_visualisations.displayLeadsMulti.datasets.leadRotation import GetAllData
+
+
+def rotation_wrapper(subj, side):
+    """function calling all necessary steps"""
+    input_folder = cfg['folders']['nifti']
+    CTimaging_orig, CTimaging_trans, _ = PrepareData.general_data(subj, input_folder, side)
+    rotation, UnitVector = PrepareData.lead_details(subj, input_folder, side,
+                                                    rotation=Configuration.rotation_dict_mod())
+
+    angles, intensities_angle, vector, peak, markerfft, valleys, finalpeak = \
+        [{k: [] for k in rotation['slices'].keys()} for _ in range(7)]  # Pre-allocate data
+    for lvl in rotation['slices'].keys():
+        angles[lvl], intensities_angle[lvl], vector[lvl], peak[lvl], markerfft[lvl], valleys[lvl], finalpeak[lvl] = \
+            PrepareData.get_intensities(lvl, rotation['slices'][lvl], CTimaging_trans)
+
+    rotation['vector'] = vector
+    rotation['markerfft'] = markerfft['marker']
+    rotContact_coords = dict([(k, r) for k, r in rotation['coordinates'].items() if k.startswith('level')])
+    rotation = PrepareData.rotation_estimate(UnitVector, angles['marker'], finalpeak['marker'], intensities_angle, rotContact_coords,
+                                             valleys['marker'], CTimaging_orig, rotation)
+
+    return rotation
 
 
 class PrepareData:
-    """Plots results from the electrode reconstruction/model creation in order to validate the results"""
+    """ Prepare lead reconstruction including rotation data in order to validate the obtained results"""
 
     def __init__(self, _debug=False):
         self.debug = _debug
 
-    def getData(self, subj, input_folder, side='right', offset=[0]*3, default_direction='anterior'):
+    @staticmethod
+    def general_data(subj, input_folder, side='right'):
+        """loads necessary data for displaying lead rotation (unsupervised recognition). functions are based on
+        https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m"""
+
+        filename_leadmodel = os.path.join(os.path.join(input_folder, subj, 'elecModels_' + subj + '.pkl'))
+        if not os.path.isfile(filename_leadmodel):
+            print("\n\t...Lead data not found, please make sure it is available")
+            return
+
+        lead_data_raw, iP, sS = LeadWorks.load_leadModel(input_folder, filename_leadmodel)
+        lead_data, sS, iP, sides = LeadWorks.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
+        single_lead = lead_data[side]
+
+        if lead_data[side]['model'] not in ('Boston Vercise Directional', 'St Jude 6172', 'St Jude 6173'):
+            print("\n\t...Rotation not required given 'non-directional' leads")
+            rotation = {'angle': -math.pi / 10}
+            return rotation
+        else:
+            CTimaging_trans = ants.image_read(filename=os.path.join(*lead_data[side]['filenameCTimaging']))
+            CTimaging_orig = ants.image_read('/'.join(re.split(r".reg_run[0-9].",
+                                                               os.path.join(*lead_data[side]['filenameCTimaging']))))
+
+        return CTimaging_orig, CTimaging_trans, single_lead
+
+    @staticmethod
+    def lead_details(subj, input_folder, x_offset=[0]*3, side='right', level_names=['marker', 'level1', 'level2'],
+                     rotation=''):
+        """wrapper to retrieve default data for coordinates, slices, fitvolumes and boxes
+        which are sorted in a sequential fashion; enabling changes as desired at later stages"""
+
+        # Pre-allocate space and get 'empty' rotation dictionary if no input was provided
+        slices, boxes, fitvolumes, marker_coord, directional_coord, UnitVector = [dict() for _ in range(6)]
+        if not rotation:
+            rotation = Configuration.rotation_dict_mod()
+
+        CTimaging_orig, CTimaging_trans, single_lead = PrepareData.general_data(subj, input_folder, side)
+        for idx, k in enumerate(level_names):
+            slices[k], boxes[k], fitvolumes[k], directional_coord[k], UnitVector = \
+                GetAllData.extractAxialSlices_part(single_lead, CTimaging_trans, CTimaging_orig, x_offset=x_offset,
+                                                   extractradius=30, part2lookfor=k, level_dist=int(idx))
+
+        # according to original script, slices [artifact_marker, artifact_dirX] MUST be flipped. Rationale for this
+        # is not quite clear; cf. https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m lines 138ff.
+        for k, v in slices.items():
+            slices[k] = np.fliplr(v)
+
+        # Update and return rotation dictionary for further processing
+        for level in level_names:
+            rotation['coordinates'][level] = directional_coord[level]
+            rotation['plot_box'][level] = boxes[level]
+            rotation['slices'][level] = slices[level]
+            rotation['fitvolumes'][level] = fitvolumes[level]
+
+        return rotation, UnitVector
+
+    @staticmethod
+    def get_intensities(level, slices, CTimaging_trans, radius=8, default_direction='anterior'):
+        """generic function intended at providing the intensities for either the marker or the distinct levels and
+        corresponding further data"""
+
+        peak, markerfft, valley_marker, finalpeak = [[] for _ in range(4)] # Pre-allocate space
+        if level != 'marker': # if level is selected for directional leads, radius is increased
+            radius = 16
+
+        angles, intensities_angle, vector = \
+            GetAllData.orient_intensityprofile(slices, pixdim=CTimaging_trans.spacing, radius=radius)
+        if level == 'marker':
+            [peak, markerfft] = GetAllData.orient_intensityPeaks(intensities_angle)
+            [valley_marker, _] = GetAllData.orient_intensityPeaks([element * -1 for element in intensities_angle])
+
+            if default_direction == 'anterior':
+                finalpeak = peak[1] if 90 < peak[0] < 270 else peak[0]
+            elif default_direction == 'posterior':
+                finalpeak = peak[0] if 90 < peak[0] < 270 else peak[1]
+
+        return angles, intensities_angle, vector, peak, markerfft, valley_marker, finalpeak
+
+    @staticmethod
+    def rotation_estimate(UnitVector, angles, finalpeak, intensities_angle, rotContact_coords,
+                          valley_marker, CTimaging_orig, rotation):
+        """function which returns rotation angles for lead @ marker and directional lead depths"""
+
+        if False in [bool(intensities_angle.get(x)) for x in intensities_angle.keys()]:
+            warnings.warn(message='intensity values are incomplete, hence rotation estimation not possible')
+            return rotation
+
+        intensities_level = dict([(k, r) for k, r in intensities_angle.items() if k.startswith('level')])
+        intensities_marker = dict([(k, r) for k, r in intensities_angle.items() if k.startswith('marker')])
+
+        yaw = math.asin(UnitVector[0])
+        pitch = math.asin(UnitVector[1] / math.cos(yaw))
+
+        warningtext = "Warning: {} > 40 deg - Determining orientation might be inaccurate!"
+        if np.rad2deg(abs(pitch)) > 40:
+            warnings.warn(warningtext.format('pitch'))
+        if np.rad2deg(abs(yaw)) > 40:
+            warnings.warn(warningtext.format('yaw'))
+
+        peakangle = angles[int(finalpeak)]  # TODO: not sure if that is always right, double check!!
+        peakangle_corrected = (math.sin(peakangle) * math.cos(pitch)) / \
+                              ((math.cos(peakangle) * math.cos(yaw)) -
+                               (math.sin(peakangle) * math.sin(yaw) * math.sin(pitch)))  # Sitz et al. 2017
+        peakangle_corrected = np.arctan(peakangle_corrected)
+
+        if peakangle < math.pi and peakangle_corrected < 0 and (peakangle - peakangle_corrected) > math.pi / 2:
+            roll_marker = peakangle_corrected + math.pi
+        elif peakangle > math.pi and peakangle_corrected > 0 and (peakangle - peakangle_corrected) > math.pi / 2:
+            roll_marker = peakangle_corrected - math.pi
+        else:
+            roll_marker = peakangle_corrected
+
+        # intensities_levels, directional_coord = # TODO only select those intensities @ levels not where the marker is
+        sum_intensity, roll, dir_valleys, roll_angles = \
+            GetAllData.determine_segmented_orientation(intensities_level, roll_marker, yaw, pitch,
+                                                       rotContact_coords, CTimaging_orig)
+
+        # Wrap up all results and return a single dictionary for further processing
+        intensities = {key: np.array([value, angles]).T for key, value in intensities_level.items()}
+        intensities.update({'marker': np.array([intensities_marker['marker'], angles]).T})
+
+        dir_valleys.update({'marker': valley_marker})
+        roll.update({'marker': roll_marker})
+
+        rotation = {'intensities': intensities,
+                    'sum_intensities': sum_intensity,
+                    'valleys': dir_valleys,
+                    'roll': roll,
+                    'pitch': pitch,
+                    'yaw': yaw,
+                    'roll_angles': roll_angles,
+                    'angle': np.rad2deg(roll['marker'])}
+
+        return rotation
+
+    # @staticmethod # TODO delete, as this is not needed anymore!
+    # def intensity_data(subj, slices, CTimaging_orig, CTimaging_trans, UnitVector, directional_coord,
+    #                    level_names=['marker', 'level1', 'level2'], rotation='', default_direction='anterior'):
+    #     """estimate intensities for available 'markers', that is marker on top if available and directional levels"""
+    #
+    #     if rotation is None:  # extracts rotation from lead with default values
+    #         rotation = PrepareData.lead_details(subj, input_folder=cfg['folders']['nifti'])
+    #         # loads rotation with default values, in case no 'rotation' data was provided when script was called
+    #
+    #     # ==============================    „Top marker“   ==============================
+    #     angles, intensities_marker_angle, vector_marker = \
+    #         GetAllData.orient_intensityprofile(slices['marker'], pixdim=CTimaging_trans.spacing, radius=8)
+    #
+    #     # ==============================    „directional marker“   ==============================
+    #     levels = dict([(k, r) for k, r in slices.items() if k.startswith('level')])
+    #     _, intensities_level_angle, vector_levels = [{k: [] for k in levels} for _ in range(3)]
+    #     for lv in levels:
+    #         _, intensities_level_angle[lv], vector_levels[lv] = \
+    #             GetAllData.orient_intensityprofile(slices[lv], pixdim=CTimaging_trans.spacing, radius=16)
+    #
+    #     # ==============================    angles for the intensity peaks   ==============================
+    #     [peak, markerfft] = GetAllData.orient_intensityPeaks(intensities_marker_angle)
+    #     [valley_marker, _] = GetAllData.orient_intensityPeaks([element * -1 for element in intensities_marker_angle])
+    #
+    #     if default_direction == 'anterior':
+    #         finalpeak = peak[1] if 90 < peak[0] < 270 else peak[0]
+    #     elif default_direction == 'posterior':
+    #         finalpeak = peak[0] if 90 < peak[0] < 270 else peak[1]
+    #
+    #     rotation = {'markerfft': markerfft}
+    #
+    #     # return intensities_marker_angle, vector_marker, intensities_level_angle, vector_levels, peak, valley_marker, finalpeak, rotation
+    #
+    #     # ==============================    yaw, pitch and roll   ==============================
+    #     yaw = math.asin(UnitVector[0])
+    #     pitch = math.asin(UnitVector[1] / math.cos(yaw))
+    #
+    #     warningtext = "Warning: {} > 40 deg - Determining orientation might be inaccurate!"
+    #     if np.rad2deg(abs(pitch)) > 40:
+    #         warnings.warn(warningtext.format('Pitch'))
+    #     if np.rad2deg(abs(yaw)) > 40:
+    #         warnings.warn(warningtext.format('Yaw'))
+    #
+    #     peakangle = angles[int(finalpeak)]  # TODO: not sure if that is always right, double check!!
+    #     peakangle_corrected = (math.sin(peakangle) * math.cos(pitch)) / \
+    #                           ((math.cos(peakangle) * math.cos(yaw)) -
+    #                            (math.sin(peakangle) * math.sin(yaw) * math.sin(pitch)))  # Sitz et al. 2017
+    #     peakangle_corrected = np.arctan(peakangle_corrected)
+    #
+    #     if peakangle < math.pi and peakangle_corrected < 0 and (peakangle - peakangle_corrected) > math.pi / 2:
+    #         peakangle_corrected = peakangle_corrected + math.pi
+    #     if peakangle > math.pi and peakangle_corrected > 0 and (peakangle - peakangle_corrected) > math.pi / 2:
+    #         peakangle_corrected = peakangle_corrected - math.pi
+    #
+    #     roll_marker = peakangle_corrected
+    #
+    #     sum_intensity, roll, dir_valleys, roll_angles = \
+    #         GetAllData.determine_segmented_orientation(intensities_level_angle, roll_marker, yaw, pitch,
+    #                                                    directional_coord, CTimaging_orig)
+    #
+    #     return sum_intensity, roll, dir_valleys, roll_angles
+
+    @staticmethod
+    def manual_angle_correction(rotation):
+        """in case the angle was corrected manually, this function is run in order to correct for all other angles"""
+
+        return rotation
+
+    # end of the experimental part and start of working part for index.py
+
+    def getData(self, subj, input_folder, side='right', offset=[0] * 3, default_direction='anterior'):
         """loads necessary data for displaying lead rotation (unsupervised recognition). unctions based on
         https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m"""
 
@@ -49,7 +277,7 @@ class PrepareData:
             CTimaging_orig = ants.image_read('/'.join(re.split(r".reg_run[0-9].",
                                                                os.path.join(*lead_data[side]['filenameCTimaging']))))
 
-        slices, boxes, marker_coord, directional_coord, UnitVector = \
+        slices, boxes, fitvolumes, marker_coord, directional_coord, UnitVector = \
             GetAllData.extractAxialSlices(single_lead, CTimaging_trans, CTimaging_orig, extractradius=30, offset=offset)
 
         # according to original script, slices [artifact_marker, artifact_dirX] MUST be flipped. Rationale for this
@@ -117,6 +345,7 @@ class PrepareData:
                     'coordinates': directional_coord,
                     'slices': slices,
                     'plot_box': boxes,
+                    'fitvolumes': fitvolumes,
                     'intensities': intensities,
                     'sum_intensities': sum_intensity,
                     'valleys': dir_valleys,
@@ -140,16 +369,13 @@ class GetAllData:
 
     @staticmethod
     def extractAxialSlices(single_lead, CTimaging_trans, CTimaging_orig,
-                           extractradius=30, offset=[0]*3, levels=('level1', 'level2')):
+                           extractradius=30, offset=[0] * 3, levels=('level1', 'level2')):
         """ extracts intensities of axial slices of the CT. In order to get a consistent artefact
         at the marker, a transformation to the original data is necessary as this corresponds to a steeper angle"""
 
-        cfg = Configuration.load_config(ROOTDIR)['preprocess']['registration']  # specific part of cfg, required later
-        lead_settings = {'Boston Vercise Directional': {'markerposition': 10.25, 'leadspacing': 2},
-                         'St Jude 6172': {'markerposition': 9, 'leadspacing': 2},
-                         'St Jude 6173': {'markerposition': 12, 'leadspacing': 3}}  # TODO: move to file and load
+        cfg = Configuration.load_config(ROOTDIR)['preprocess']['registration']
 
-        intensity, box, rotContact_coords = [dict() for _ in range(3)]  # pre-allocate for later
+        intensity, box, fitvolume, rotContact_coords = [dict() for _ in range(4)]  # pre-allocate for later
         estimated_markers = dict([(k, r) for k, r in single_lead.items() if k.startswith('marker')])
         file_invMatrix = os.path.join(single_lead['filenameCTimaging'][0], 'CT2template_1InvWarpMatrix.mat')
 
@@ -171,9 +397,11 @@ class GetAllData:
         filenameCT = '/'.join(re.split(r".{}run[0-9].".format(cfg['prefix']),
                                        os.path.join(*single_lead['filenameCTimaging'])))
 
-        # Extract the intensities from axial slices which result freom original imaging and markers in vx-coordinates
-        intensity['marker'], box['marker'], _ = GetAllData.get_axialplanes(marker_origCTvx, filenameCT,
-                                                                           UnitVector_origCT, window_size=extractradius)
+        # Extract the intensities from axial slices which result from original imaging and markers in vx-coordinates
+        intensity['marker'], box['marker'], fitvolume['marker'] = GetAllData.get_axialplanes(marker_origCTvx,
+                                                                                             filenameCT,
+                                                                                             UnitVector_origCT,
+                                                                                             window_size=extractradius)
         marker_coordinates = marker_origCTvx
 
         # Loop through directional levels to obtain necessary coordinates and rotation
@@ -183,10 +411,56 @@ class GetAllData:
                                                         idx * lead_settings[single_lead['model']]['leadspacing']))
             rotContact_coords[l] = ants.transform_physical_point_to_index(CTimaging_orig,
                                                                           point=rotContact_coords[l])
-            intensity[l], box[l], _ = GetAllData.get_axialplanes(rotContact_coords[l], filenameCT, UnitVector_origCT,
-                                                                 window_size=extractradius)
+            intensity[l], box[l], fitvolume[l] = GetAllData.get_axialplanes(rotContact_coords[l], filenameCT,
+                                                                            UnitVector_origCT,
+                                                                            window_size=extractradius)
 
-        return intensity, box, marker_coordinates, rotContact_coords, UnitVector_origCT
+        return intensity, box, fitvolume, marker_coordinates, rotContact_coords, UnitVector_origCT
+
+    # The next lines show a generic way of extracting slices per depth instead of all!
+    @staticmethod
+    def extractAxialSlices_part(single_lead, CTimaging_trans, CTimaging_orig, extractradius=30, x_offset=0,
+                                part2lookfor='marker', level_dist=1):
+        """ extracts intensities of axial slices of the CT. In order to get a consistent artefact
+        at the marker, a transformation to the original data is necessary as this corresponds to a steeper angle"""
+
+        # General settings and pre-allocation of space
+        cfg = Configuration.load_config(ROOTDIR)['preprocess']['registration']  # specific part of cfg, required later
+        file_invMatrix = os.path.join(single_lead['filenameCTimaging'][0], 'CT2template_1InvWarpMatrix.mat')
+        filenameCT = '/'.join(re.split(r".{}run[0-9].".format(cfg['prefix']),
+                                       os.path.join(*single_lead['filenameCTimaging'])))
+
+        # Convert the estimated markers (cf. preprocLeadCT.py) to original imaging data w/ transformation matrix
+        estimated_markers = dict([(k, r) for k, r in single_lead.items() if k.startswith('marker')])
+        marker_origCT = dict()  # next part inconsistent to orientation from ea_main_orient (cf. lines 108ff.)!!
+        for marker, coordinates in estimated_markers.items():
+            coords_temp = [int(round(c)) for c in coordinates]
+            transformed = LeadWorks.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
+                                                          to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
+            marker_origCT[marker] = np.array(transformed['points'])  # use points to account for distances
+
+        UnitVector_origCT = np.divide((marker_origCT['markers_tail'] - marker_origCT['markers_head']),
+                                      np.linalg.norm(marker_origCT['markers_tail'] - marker_origCT['markers_head']))
+
+        marker_origCTmm = np.round(marker_origCT['markers_head'] + [0, 0, x_offset] +
+                                   np.multiply(lead_settings[single_lead['model']]['markerposition'],
+                                               UnitVector_origCT))
+        marker_origCTvx = ants.transform_physical_point_to_index(CTimaging_orig, point=marker_origCTmm)
+
+        # Extract intensities from axial slices which result from original imaging and markers in vx-coordinates
+        if part2lookfor == 'marker':
+            intensity, box, fitvolume = \
+                GetAllData.get_axialplanes(marker_origCTvx, filenameCT, UnitVector_origCT, window_size=extractradius)
+            coordinates_temp = marker_origCTvx
+        else:  # extract data from 'levels'
+            coordinates_temp = np.round(marker_origCT['markers_head'] + [0, 0, x_offset] +
+                                        np.multiply(UnitVector_origCT,
+                                                    level_dist * lead_settings[single_lead['model']]['leadspacing']))
+            coordinates_temp = ants.transform_physical_point_to_index(CTimaging_orig, point=coordinates_temp)
+            intensity, box, fitvolume = GetAllData.get_axialplanes(coordinates_temp, filenameCT, UnitVector_origCT,
+                                                                   window_size=extractradius)
+
+        return intensity, box, fitvolume, coordinates_temp, UnitVector_origCT
 
     @staticmethod
     def get_axialplanes(lead_point, imaging, unit_vector, window_size=10, res=.5, transformation_matrix=np.eye(4)):
@@ -311,34 +585,35 @@ class GetAllData:
         return peak, sprofil
 
     @staticmethod
-    def determine_segmented_orientation(intensities, roll, yaw, pitch, dirLevel_mm, CTimaging_orig):
+    def determine_segmented_orientation(intensities_level, roll_marker, yaw, pitch, dirLevel_mm, CTimaging_orig):
         """ determine angles of the 6-valley artifact ('dark star') artifact around directional markers; for details cf.
         https://github.com/netstim/leaddbs/blob/master/ea_orient_main.m (lines 474f.)"""
 
         # Convert coordinates for directional leads to image space:
-        dirLevel_vx = {k: [] for k in dirLevel_mm.keys()} # TODO: it would make sense to put this in the calling function as dirLevel_mm is not used whatsoever
+        dirLevel_vx = {k: [] for k in
+                       dirLevel_mm.keys()}  # TODO: put this in the calling function as dirLevel_mm not used whatsoever
         for l, coords in dirLevel_mm.items():
             dirLevel_vx[l] = ants.transform_index_to_physical_point(CTimaging_orig,
                                                                     index=[int(x) for x in np.round(dirLevel_mm[l])])
 
-        sum_intensities, roll_values, dir_valleys = [{k: [] for k in intensities.keys()} for _ in range(3)]
+        sum_intensities, roll_values, dir_valleys = [{k: [] for k in intensities_level.keys()} for _ in range(3)]
         roll_angles = []
-        for level, intensity in intensities.items():
+        for level, intensity in intensities_level.items():
             count = 0
             shift = []
 
             for k in range(-30, 31):
                 shift.append(k)
-                rolltemp = roll + np.deg2rad(k)
+                rolltemp = roll_marker + np.deg2rad(k)
                 dir_angles = GetAllData.orient_artifact_at_level(rolltemp, pitch, yaw, dirLevel_vx[level])
                 temp = GetAllData.peaks_dir_marker(intensity, dir_angles)
                 sum_intensities[level].append(temp)
-                if level == list(intensities.keys())[0]:
+                if level == list(intensities_level.keys())[0]:
                     roll_angles.append(rolltemp)
                 count += 1
 
-        dir_angles = {k: [] for k in intensities.keys()}
-        for level in intensities.keys():
+        dir_angles = {k: [] for k in intensities_level.keys()}
+        for level in intensities_level.keys():
             temp = np.argmin(sum_intensities[level])
             roll_values[level] = roll_angles[temp]
             dir_angles[level] = GetAllData.orient_artifact_at_level(roll_values[level], pitch, yaw, dirLevel_vx[level])
