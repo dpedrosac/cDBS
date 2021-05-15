@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
+import sys, os
 
 # ====================    General settings for GUIs/functions within ./utils   ====================
+sys.path.append('/media/storage/cDBS')
 ROOTDIR = os.path.dirname(os.path.realpath(__file__))
 FILEDIR = os.path.join(ROOTDIR, 'data')
 GITHUB = 'https://github.com/dpedrosac/cDBS'

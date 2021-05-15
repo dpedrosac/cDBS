@@ -3,6 +3,7 @@ import dash_bootstrap_components as dbc
 import dash_daq as daq
 import dash_html_components as html
 from dash.exceptions import PreventUpdate
+from dash.dependencies import Input, Output, State
 from operator import add
 
 import dash
@@ -19,8 +20,7 @@ from dependencies import CONTENT_STYLE
 # get relative data folder
 PATH = pathlib.Path(__file__).parent
 DATA_PATH = PATH.joinpath("../datasets").resolve()
-offset = [
-             0] * 3  # set to zero in order to have a starting value # TODO: this must be hard coded and saved somewhere in the data
+offset = [0] * 3  # set to zero in order to have a starting value # TODO: this must be hard coded and saved somewhere in the data
 
 # ==============================    Settings   ==============================
 width_subplot = 300
@@ -110,6 +110,7 @@ def plot_intensities(intensity, valleys, title_id, fft_data='', peaks='', width=
     data2plot = pds.melt(data2plot, id_vars='id', value_vars=data2plot.columns[:-1])
 
     # ================    line plot of intensities (and estimated FFT in the case of 'marker')    ================
+    # print('values: {}, {}, {}'.format(width, height, data2plot.min()['value']))
     if title_id == 'intensity-profile-marker':
         fig = px.line(data2plot, x='id', y='value', width=width, height=height, color='variable',
                       color_discrete_map={
@@ -153,8 +154,8 @@ def plot_intensities(intensity, valleys, title_id, fft_data='', peaks='', width=
 
 def plot_similarity(rollangles, roll_values, sum_intensity, level, id, width=width_subplot, height=height_subplot):
     """plots the similarities ??"""
-
-    # ====================    get data into a frame to facilitate plotting   ====================
+    # print("results are: {}, {}, {}".format(level, id, width))
+    # ====================    geplot_simit data into a frame to facilitate plotting   ====================
     keys_to_extract = ['marker', level]
     roll_values = {key: roll_values[key] for key in keys_to_extract}
     idx_roll = [np.searchsorted(rollangles, v) for k, v in roll_values.items()]
@@ -167,16 +168,17 @@ def plot_similarity(rollangles, roll_values, sum_intensity, level, id, width=wid
     # ================    line plot of intensities (and estimated FFT in the case of 'marker')    ================
     fig_right = px.line(data2plot, x='id', y='value', width=width, height=height, color='variable',
                         color_discrete_map={"intensities": line_colors[0]})
-
     fig_right.add_hline(y=data2plot.min()['value'] * 1.05, line_width=1.2)  # somehow bulky hack for x/y-axis
     fig_right.add_vline(x=0, line_width=1.2)
     fig_right.update_traces(line=dict(width=0.5), showlegend=False)
-
     fig_right.update_yaxes(showticklabels=False, showgrid=False, title_text="", zerolinewidth=1.5, zeroline=True)
-    fig_right.update_xaxes(showticklabels=True, showgrid=True, tickvals=np.arange(0, 61, step=20),
-                           title_text="", ticks='inside', gridwidth=.25, gridcolor='lightgray')
+    try:
+        fig_right.update_xaxes(showticklabels=True, showgrid=True, tickvals=np.arange(0, 61, step=20),
+                               title_text="", ticks='inside', gridwidth=.25, gridcolor='lightgray')
+    except ValueError:
+        print("Problem's here!!")
 
-    # ====================    display WHAT IS THE SIMILARITY INDEX?!   ====================
+    # ====================    display (WHAT IS THE) similatity index?!   ====================
     for idx, rolls in enumerate(roll_values):
         fig_right.add_trace(go.Scatter(x=[np.rad2deg(rollangles[idx_roll[idx]])], y=[sum_intensity[idx_roll[idx]]],
                                        mode='markers', showlegend=False, marker=dict(size=10, color=marker_colors[0],
@@ -186,7 +188,7 @@ def plot_similarity(rollangles, roll_values, sum_intensity, level, id, width=wid
                             margin=dict(l=20, r=20, t=45, b=10), paper_bgcolor='white', plot_bgcolor='white',
                             width=width, height=height)
 
-    return fig_right # dcc.Graph(id=id, figure=fig_right)
+    return fig_right
 
 
 def add_arrow_buttons(level):
@@ -227,8 +229,11 @@ layout_container = html.Div(id='rotation-container', children=[
                 id="loading-marker-intensities",
                 type="default",
                 children=dbc.Col(dcc.Graph(id='marker-intensities'), width=4)),
-            dbc.Row(children=[html.Div(id='my-knob'),
-                              html.Div(id='knob-output', style={'text-align': 'center'})])
+            html.Div(
+                children=dbc.Row(children=[html.Div(daq.Knob(id='my-knob', size=75, value=20, max=40, min=-40,
+                                                             label='R/L',
+                                                             scale={'start': -40, 'labelInterval': 5, 'interval': 40})),
+                                           html.Div(id='knob-output', style={'text-align': 'center'})]))
         ]),
 
     # Second row for Level1
@@ -295,32 +300,31 @@ layout_container = html.Div(id='rotation-container', children=[
               dash.dependencies.Input('hemisphere-headline', 'children'))
 def headline_changes(value):
     """changes headline according to pressed button on sidebar"""
-    if value is None:
-        term = 'Please select Subject/Hemisphere'
-    else:
-        term = 'Rotation: {}'.format(value)
-
-    return term
+    return 'Please select Subject/Hemisphere' if value is None else 'Rotation: {}'.format(value)
 
 
 @app.callback(
-    dash.dependencies.Output('knob-output', 'children'),
-    [dash.dependencies.Input('my-knob', 'value')])
-def update_output(value):
+    Output('knob-output', 'children'),
+    [Input('my-knob', 'value')],
+    [State("results-hemisphere", "data")])
+def update_knob_value(value, data):
     if value is None:
         PreventUpdate
     else:
+        data['angle_manual_correction'] = data['angle'] - value
+        print("values: prev. angle - {}, man. corr. {}".format(data['angle'], data['angle_manual_correction']))
+
         return 'Rotation angle is {:.2f}.'.format(value)
 
 
-@app.callback(dash.dependencies.Output('intermediate-value', 'children'),
-              dash.dependencies.Input('marker-cranial', 'n_clicks'),
-              dash.dependencies.Input('marker-ventral', 'n_clicks'),
-              dash.dependencies.Input('level1-cranial', 'n_clicks'),
-              dash.dependencies.Input('level1-ventral', 'n_clicks'),
-              dash.dependencies.Input('level2-cranial', 'n_clicks'),
-              dash.dependencies.Input('level2-ventral', 'n_clicks'),
-              dash.dependencies.State('intermediate-value', 'children'))
+@app.callback(Output('intermediate-value', 'children'),
+              Input('marker-cranial', 'n_clicks'),
+              Input('marker-ventral', 'n_clicks'),
+              Input('level1-cranial', 'n_clicks'),
+              Input('level1-ventral', 'n_clicks'),
+              Input('level2-cranial', 'n_clicks'),
+              Input('level2-ventral', 'n_clicks'),
+              State('intermediate-value', 'children'))
 def run_script_onClick(mrk_up, mrk_down, l1_up, l1_down, l2_up, l2_down, offset_value):
     if all(x is None for x in [mrk_up, mrk_down, l1_up, l1_down, l2_up, l2_down]):
         raise PreventUpdate
@@ -345,67 +349,73 @@ def run_script_onClick(mrk_up, mrk_down, l1_up, l1_down, l2_up, l2_down, offset_
 
 
 #  =================== Callback returning axial slices for marker, level1 and level2 ===================
-@app.callback(dash.dependencies.Output('marker-axial', 'figure'),
-              dash.dependencies.Output('level1-axial', 'figure'),
-              dash.dependencies.Output('level2-axial', 'figure'),
-              dash.dependencies.Output('my-knob', 'children'),
-              dash.dependencies.Input('results-hemisphere', 'data'))
-def plot_marker(value):
+@app.callback(Output('marker-axial', 'figure'),
+              Output('level1-axial', 'figure'),
+              Output('level2-axial', 'figure'),
+              Output('my-knob', 'value'),
+              Input('results-hemisphere', 'data'))
+def plot_marker(hemisphere):
     """creates graphical objects for marker and level1/2 and loads rotation angle to return all for plotting purposes"""
-    if value is None:
-        marker_slice, level1_slice, level2_slice = [dict() for _ in range(3)]
-        rotation_angle = {}
+    if hemisphere is None:
+        PreventUpdate
+        # marker_slice, level1_slice, level2_slice = [dict() for _ in range(3)]
+        # rotation_angle = 0
     else:
-        marker_slice = prepare_imshow(np.array(value['slices']['marker']),
-                                      np.array(value['valleys']['marker']),
-                                      np.array(value['plot_box']['marker']),
-                                      np.array(value['coordinates']['marker']),
+        marker_slice = prepare_imshow(np.array(hemisphere['slices']['marker']),
+                                      np.array(hemisphere['valleys']['marker']),
+                                      np.array(hemisphere['plot_box']['marker']),
+                                      np.array(hemisphere['coordinates']['marker']),
                                       title='Marker')
-        level1_slice = prepare_imshow(np.array(value['slices']['level1']),
-                                      np.array(value['valleys']['level1']),
-                                      np.array(value['plot_box']['level1']),
-                                      np.array(value['coordinates']['level1']),
+        level1_slice = prepare_imshow(np.array(hemisphere['slices']['level1']),
+                                      np.array(hemisphere['valleys']['level1']),
+                                      np.array(hemisphere['plot_box']['level1']),
+                                      np.array(hemisphere['coordinates']['level1']),
                                       title='Level1')
-        level2_slice = prepare_imshow(np.array(value['slices']['level2']),
-                                      np.array(value['valleys']['level2']),
-                                      np.array(value['plot_box']['level2']),
-                                      np.array(value['coordinates']['level2']),
+        level2_slice = prepare_imshow(np.array(hemisphere['slices']['level2']),
+                                      np.array(hemisphere['valleys']['level2']),
+                                      np.array(hemisphere['plot_box']['level2']),
+                                      np.array(hemisphere['coordinates']['level2']),
                                       title='Level2')
-        rotation_angle = daq.Knob(id='my-knob', size=75, value=value['angle'], max=120, min=-120, label='R/L',
-                                  scale={'start': -120, 'labelInterval': 15, 'interval': 120})
+        rotation_angle = hemisphere['angle']
 
     return marker_slice, level1_slice, level2_slice, rotation_angle
 
 
 #  =================== Callback returning intensities for marker, level1 and level2 ===================
-@app.callback(dash.dependencies.Output('marker-intensities', 'figure'),
-              dash.dependencies.Output('level1-intensities', 'figure'),
-              dash.dependencies.Output('level2-intensities', 'figure'),
-              dash.dependencies.Input('results-hemisphere', 'data'))
-def intensity_plotting(value):
-    """creates figures for intensities of marker- and level1/2-artefactsand for plotting purposes"""
+@app.callback(Output('marker-intensities', 'figure'),
+              Output('level1-intensities', 'figure'),
+              Output('level2-intensities', 'figure'),
+              Input('results-hemisphere', 'data'),
+              Input('my-knob', 'value'),
+              State("results-hemisphere", "data"))
+def intensity_plotting(hemisphere, data, data2):
+    """creates figures for intensities of marker- and level1/2-artefacts and for plotting purposes"""
     level_intensities = {k: dict() for k in ['level1', 'level2']}
-    if value is None:
+    print("angle is {}".format(hemisphere['angle_manual_correction']))
+    print(data2['angle_manual_correction'])
+    if hemisphere is None:
         marker_intensity = {}
     else:
-        marker_intensity = plot_intensities(np.array(value['intensities']['marker']),
-                                            np.array(value['valleys']['marker']),
+        print('valleys are @ {} degrees'.format(hemisphere['valleys']['marker']))
+        print('offset is @ {} degrees'.format(hemisphere['angle_manual_correction']))
+        marker_intensity = plot_intensities(np.array(hemisphere['intensities']['marker']),
+                                            np.array(hemisphere['valleys']['marker']),
                                             title_id='intensity-profile-marker',
-                                            fft_data=np.array(value['markerfft']),
-                                            peaks=np.array(value['peak']))
+                                            fft_data=np.array(hemisphere['markerfft']),
+                                            peaks=np.array(hemisphere['peak']))
         for level in level_intensities.keys():
-            level_intensities[level] = plot_intensities(np.array(value['intensities'][level]),
-                                                        np.array(value['valleys'][level]),
+            level_intensities[level] = plot_intensities(np.array(hemisphere['intensities'][level]),
+                                                        np.array(hemisphere['valleys'][level]),
                                                         title_id='intensity-profile-{}'.format(level))
 
-    print('these are the items in rotation: {}'.format(value.keys()))
+    # print('these are the items in rotation: {}'.format(value.keys()))
     return marker_intensity, level_intensities['level1'], level_intensities['level2']
 
 
 #  =================== Callback returning intensities for marker, level1 and level2 ===================
-@app.callback(dash.dependencies.Output('level1-similarity', 'figure'),
-              dash.dependencies.Output('level2-similarity', 'figure'),
-              dash.dependencies.Input('results-hemisphere', 'data'))
+@app.callback(Output('level1-similarity', 'figure'),
+              Output('level2-similarity', 'figure'),
+              Input('results-hemisphere', 'data'))
 def similarity_plotting(value):
     """creates graphical objects for similarities at level1/2 for plotting purposes"""
     if value is None:
@@ -416,6 +426,7 @@ def similarity_plotting(value):
                                             value['sum_intensities']['level1'],
                                             level='level1',
                                             id='similarity-profile-level1')
+
         level2_similarity = plot_similarity(value['roll_angles'],
                                             value['roll'],
                                             value['sum_intensities']['level2'],
@@ -423,3 +434,20 @@ def similarity_plotting(value):
                                             id='similarity-profile-level2')
 
     return level1_similarity, level2_similarity
+
+
+#  =================== Callback returning overall data estimated in preprocLeadCT.py ===================
+# @app.callback(Output('subject-data', 'data'),
+#              Input('my-knob', 'value'),
+#              Input('results-hemisphere', 'data'),
+#              State('subject-data', 'data'),
+#              State('selected-subject', 'data'))
+#def modify_angle(value, subj_id):
+#    if value is None:
+#        PreventUpdate
+
+#    # TODO: Here it should be referenced to the scipt in leadRotation in
+#    print('angle was changed to {} degrees, new estimations started'.format(value))
+#    data = []
+#    return data, subj_id
+# children

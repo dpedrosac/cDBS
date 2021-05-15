@@ -161,7 +161,8 @@ class Configuration:
                     'markerfft': [],
                     'vector': [],
                     'roll_angles': [],
-                    'angle': []}
+                    'angle': [],
+                    'angle_manual_correction': []}
 
         return rotation
 
@@ -189,7 +190,8 @@ class Configuration:
                             'yaw',
                             'markerfft',
                             'roll_angles',
-                            'angle']
+                            'angle'
+                            'angle_manual_correction']
 
             for idx in content_once:
                 rotation[idx] = []

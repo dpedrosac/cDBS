@@ -5,14 +5,12 @@ import itertools
 import math
 import os
 import re
-import sys
 import warnings
 
 import ants
 import numpy as np
 import scipy
 
-sys.path.append('/media/storage/cDBS')  # TODO: there must be a more elegant way to "not" hard code this but use ROOTDIR
 from utils.HelperFunctions import Configuration, LeadWorks
 from dependencies import ROOTDIR, lead_settings
 cfg = Configuration.load_config(ROOTDIR)
@@ -21,7 +19,9 @@ cfg = Configuration.load_config(ROOTDIR)
 
 
 def rotation_wrapper(subj, side):
-    """function calling all necessary steps"""
+    """function calling all necessary steps; i.e. this function when called when initiating script is used to gather
+    all data, whereas for special functionality other modules can be called/used"""
+
     input_folder = cfg['folders']['nifti']
     CTimaging_orig, CTimaging_trans, _ = PrepareData.general_data(subj, input_folder, side)
     rotation, UnitVector = PrepareData.lead_details(subj, input_folder, side,
@@ -36,9 +36,8 @@ def rotation_wrapper(subj, side):
     rotation['vector'] = vector
     rotation['markerfft'] = markerfft['marker']
     rotContact_coords = dict([(k, r) for k, r in rotation['coordinates'].items() if k.startswith('level')])
-    rotation = PrepareData.rotation_estimate(UnitVector, angles['marker'], finalpeak['marker'], intensities_angle, rotContact_coords,
-                                             valleys['marker'], CTimaging_orig, rotation)
-
+    rotation = PrepareData.rotation_estimate(UnitVector, angles['marker'], finalpeak['marker'], intensities_angle,
+                                             rotContact_coords, valleys['marker'], CTimaging_orig, rotation)
     return rotation
 
 
@@ -110,7 +109,7 @@ class PrepareData:
         corresponding further data"""
 
         peak, markerfft, valley_marker, finalpeak = [[] for _ in range(4)] # Pre-allocate space
-        if level != 'marker': # if level is selected for directional leads, radius is increased
+        if level != 'marker':  # if level is selected for directional leads, radius is increased
             radius = 16
 
         angles, intensities_angle, vector = \
@@ -179,7 +178,8 @@ class PrepareData:
                     'pitch': pitch,
                     'yaw': yaw,
                     'roll_angles': roll_angles,
-                    'angle': np.rad2deg(roll['marker'])}
+                    'angle': np.rad2deg(roll['marker']),
+                    'angle_manual_correction': 0}
 
         return rotation
 
@@ -247,7 +247,7 @@ class PrepareData:
 
     @staticmethod
     def manual_angle_correction(rotation):
-        """in case the angle was corrected manually, this function is run in order to correct for all other angles"""
+        """in case angles were corrected manually, this function is run in order to adapt visualisation"""
 
         return rotation
 
@@ -355,7 +355,8 @@ class PrepareData:
                     'markerfft': markerfft,
                     'vector': vector_levels,
                     'roll_angles': roll_angles,
-                    'angle': np.rad2deg(roll['marker'])}
+                    'angle': np.rad2deg(roll['marker']),
+                    'angle_manual_correction': 0}
 
         return rotation
 
