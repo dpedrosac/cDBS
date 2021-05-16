@@ -7,6 +7,7 @@ import pickle
 import re
 import time
 import warnings
+import cc3d
 
 import ants
 import numpy as np
@@ -31,13 +32,13 @@ class LeadWorks:
         self.verbose = 0
         self.debug = False
         self.PacerEmulation = True
- 
+
     def PaCER_script(self, subjects, inputfolder=''):
         """wrapper script for all steps included in the PaCER algorithm"""
 
         print("\nLead detection of {} subject(s)".format(len(subjects)))
-        if not inputfolder:  # select default input folder
-            inputfolder = self.cfg['folders']['nifti']
+        inputfolder = self.cfg['folders']['nifti'] if not inputfolder else inputfolder  # select default input folder
+        # inputfolder = self.cfg['folders']['nifti'] # can be deleted if no error is thrown
 
         # Look for data files containing CT imaging including the brainMask and load this into workspace
         available_files = FileOperations.get_filelist_as_tuple(inputdir=inputfolder, subjects=subjects)
@@ -55,13 +56,14 @@ class LeadWorks:
             return
 
         if not file_id_brainMask:
-            warnings.warn(message="\tNo brain mask was found, trying to obtain a mask using the ANTSpyNET routines")
+            warnings.warn(message="\tNo brain mask was found, trying to obtain a mask using ANTSpyNET routines")
             regex2lookforT1 = self.cfg['preprocess']['normalisation']['prefix'] + 'run'
             file_id_T1 = [file_tuple for file_tuple in available_files
-                                 if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
-                                 and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
+                          if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
+                          and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
             if not file_id_T1:
-                Output.msg_box(text='There is no T1 imaging available. BrainMask extraction impossible.', title='No T1-sequencesavailable")')
+                Output.msg_box(text='No T1-sequence imaging available. BrainMask extraction impossible.',
+                               title='T1 sequences missing")')
                 return
             else:
                 T1imaging = ants.image_read(file_id_T1[0][0])
@@ -69,7 +71,8 @@ class LeadWorks:
                                                              registered_images=T1imaging)
                 file_id_brainMask = [file_id_brainMask] if type(file_id_brainMask) == tuple else file_id_brainMask
 
-        fileID = list(FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all information to one list
+        fileID = list(
+            FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all information to one list
 
         metal_threshold = int(self.cfg['lead_detection']['PaCER']['metal_threshold'])
         elecModels, intensityProfiles, skelSkalms = self.electrodeEstimation(fileID[0], threshold=metal_threshold)
@@ -95,7 +98,8 @@ class LeadWorks:
             return
         elif max(CTimaging.spacing) > 1:
             warnings.warn("\tSlice thickness > 1mm! Independent contact detection unlikely. Using 'contactAreaCenter'")
-            self.cfg['lead_detection']['PaCER']['detection_method'] = 'contactAreaCenter'  # when spacing too big, this detection method is recommended
+            self.cfg['lead_detection']['PaCER'][
+                'detection_method'] = 'contactAreaCenter'  # when spacing too big, this detection method is recommended
         elif max(CTimaging.spacing) > .7:
             warnings.warn("\tSlice thickness > .7mm! Reliable contact detection not guaranteed. For certain "
                           "lead types with large contacts, it may, however, work.")
@@ -133,7 +137,7 @@ class LeadWorks:
         elecModels, intensityProfiles, skelSkalms = [[] for _ in range(3)]
         for idx, leadPoints in enumerate(leadPointCloudStruct):
             print("\nAnalysing lead no {} with {} pixels".format("\u0332".join(str(idx + 1)),
-                                                                   str(len(leadPoints['pixelList']))))
+                                                                 str(len(leadPoints['pixelList']))))
             initialPoly, tPerMm, skeleton, totalLengthMm = self.electrodePointCloudModelEstimate(leadPoints,
                                                                                                  CTimaging.spacing[2])
             mod, prof, skel = \
@@ -159,7 +163,7 @@ class LeadWorks:
             X = np.multiply(comp.coords, np.tile(list(CTimaging.spacing), (len(comp.coords), 1)))
             n_samples = X.shape[0]
             X_transformed = pca.fit_transform(X)
-            X_centered = X - np.mean(X, axis=0)  # Is this necessary?
+            X_centered = X - np.mean(X, axis=0)
             cov_matrix = np.dot(X_centered.T, X_centered) / n_samples
             latent = pca.explained_variance_
 
@@ -196,7 +200,7 @@ class LeadWorks:
             leadpoint_cloudstruct.append({k: [] for k in items})
             pixelList = leadID['coords']
             leadpoint_cloudstruct[i]['pixelList'] = pixelList
-            leadpoint_cloudstruct[i]['points'] = pixelList   @ abs(transformation_matrix[:3, :3])
+            leadpoint_cloudstruct[i]['points'] = pixelList @ abs(transformation_matrix[:3, :3])
             leadpoint_cloudstruct[i]['pixelValues'] = np.array([CTimagingData[tuple(pixelList[i])]
                                                                 for i, k in enumerate(pixelList)])
             elecMask_temp = np.zeros(shape=CTimaging.shape)
@@ -227,7 +231,7 @@ class LeadWorks:
         skeleton, sumInPlane = [[] * i for i in range(2)]
         for zplaneID in zPlanes:
             idx_zplane = np.where(abs(leadPoints['points'][:, -1] - zplaneID) <= tol)
-            if idx_zplane[0].shape[0] > 1:  #ignore 'pseude-slices' with only one plane
+            if idx_zplane[0].shape[0] > 1:  # ignore 'pseude-slices' with only one plane
                 inPlanePoints = leadPoints['points'][idx_zplane, :]
                 if USE_REF_WEIGHTING:
                     inPlaneIntensities = leadPoints['pixelValues'][idx_zplane].astype('float32')  #
@@ -250,10 +254,11 @@ class LeadWorks:
         # Approximate parameterized polynomial([x y z] = f(t))
         if len(skeleton) < polynomial_ord + 1:
             print("\t\tElectrodePointCloudModelEstimate: less data points {} than internal polynomial degree ({}). "
-                  "caveat: lowering degree!".format(str(len(skeleton), str(polynomial_ord))))
+                  "caveat: lowering degree!".format(str(len(skeleton)), str(polynomial_ord)))
             polynomial_ord = len(skeleton) - 1
 
-        r3polynomial, tPerMm = self.fitParamPolytoSkeleton(skeleton, degree=polynomial_ord)  # Husch et al. 2015 eq.(1-4)
+        r3polynomial, tPerMm = self.fitParamPolytoSkeleton(skeleton,
+                                                           degree=polynomial_ord)  # Husch et al. 2015 eq.(1-4)
         totalLengthMm = self.polyArcLength3(polyCoeff=r3polynomial)
 
         return r3polynomial, tPerMm, skeleton, totalLengthMm
@@ -306,7 +311,7 @@ class LeadWorks:
             print("Falling back to contact detection method: contactAreaCenter")
             detection_method == 'contactAreaCenter'
 
-        if (len(contact_pos) < 4 or detection_method == 'contactAreaCenter'):
+        if len(contact_pos) < 4 or detection_method == 'contactAreaCenter':
             if len(contact_pos) < 4:
                 warnings.warn("\tCould not detect independent electrode contacts. Check image quality")
                 return
@@ -394,7 +399,7 @@ class LeadWorks:
             cumLengthMm[k] = np.sum(deltas)
             approxTotalLengthMm = approxTotalLengthMm + deltas[k]
 
-        avgStepsPerMm = 1 / approxTotalLengthMm # average steps [per mm]
+        avgStepsPerMm = 1 / approxTotalLengthMm  # average steps [per mm]
         t = np.append(0, np.divide(cumLengthMm, approxTotalLengthMm))  # 0 at start->len(t)=len(skel.), norm. to [0, 1]
 
         # Design matrix e.g.T = [t. ^ 4 t. ^ 3 t. ^ 2 t ones(length(t), 1)].'
@@ -405,7 +410,8 @@ class LeadWorks:
             T[:, iter] = t ** k
         T = T.T
 
-        r3polynomial, _, _, _ = np.linalg.lstsq(T.T, skeleton, rcond=None)  # OLS solution for linear regression with T as coeffs.
+        r3polynomial, _, _, _ = np.linalg.lstsq(T.T, skeleton,
+                                                rcond=None)  # OLS solution for linear regression with T as coeffs.
         fittingErrs = np.sqrt(np.sum((r3polynomial.T @ T - skeleton.T) ** 2, axis=0))
         meanFittingError = np.mean(fittingErrs, axis=0)
         stdFittingError = np.std(fittingErrs, axis=0)
@@ -562,7 +568,7 @@ class LeadWorks:
         except TypeError:
             epsilon = 0.001  # used to avoid numerical accuracy problems in assertion
             if not np.all(lowerLimit[:] <= upperLimit[:] + epsilon):
-                raise('There is an accuracy problem here!')
+                raise ('There is an accuracy problem here!')
 
         regX, regY, regZ = polyCoeff[:, 0], polyCoeff[:, 1], polyCoeff[:, 2]
         x_d, y_d, z_d = np.polyder(regX), np.polyder(regY), np.polyder(regZ)
@@ -610,7 +616,7 @@ class LeadWorks:
 
         if np.all(np.isinf(distances)):
             warnings.warn("\t\tCould NOT detect electrode type, thus contact detection might be flawed "
-                  "(Low image resolution? Large slice thickness!?) Set electrode type manually to continue with data")
+                          "(Low image resolution? Large slice thickness!?) Set electrode type manually to continue with data")
             elecStruct = electrodeGeometries[-1]
 
             return elecStruct, rms
@@ -652,22 +658,23 @@ class LeadWorks:
         for i, coords in enumerate(r3polynomial.T):
             poly_coeffs.append(np.polyval(coords, positions))
         refitReZeroedElecMod['getContactPositions3D'] = np.concatenate((poly_coeffs,
-                                                                        np.ones((1,4)))).T @ np.eye(4) / CTspace
-        refitReZeroedElecMod['getContactPositions3D'] = refitReZeroedElecMod['getContactPositions3D'][:,:3]
+                                                                        np.ones((1, 4)))).T @ np.eye(4) / CTspace
+        refitReZeroedElecMod['getContactPositions3D'] = refitReZeroedElecMod['getContactPositions3D'][:, :3]
 
         trajectory = []
         for dim in range(3):
             trajectory.append(np.linspace(start=refitReZeroedElecMod['getContactPositions3D'][0, dim],
                                           stop=refitReZeroedElecMod['getContactPositions3D'][0, dim] +
                                                10 * (refitReZeroedElecMod['getContactPositions3D'][0, dim] -
-                                                     refitReZeroedElecMod['getContactPositions3D'][-1, dim]), num=20))  # TODO: differences between last contact and first are better suited for the trajectory
+                                                     refitReZeroedElecMod['getContactPositions3D'][-1, dim]),
+                                          num=20))  # TODO: differences between last contact and first are better suited for the trajectory
         refitReZeroedElecMod['trajectory'] = np.array(trajectory).T
         refitReZeroedElecMod['markers_head'] = refitReZeroedElecMod['getContactPositions3D'][0, :]
         refitReZeroedElecMod['markers_tail'] = refitReZeroedElecMod['getContactPositions3D'][3, :]
         refitReZeroedElecMod['normtraj_vector'] = np.divide((refitReZeroedElecMod['markers_tail'] -
-                                                   refitReZeroedElecMod['markers_head']),
-                                                    np.linalg.norm(refitReZeroedElecMod['markers_tail'] -
-                                                   refitReZeroedElecMod['markers_head']))
+                                                             refitReZeroedElecMod['markers_head']),
+                                                            np.linalg.norm(refitReZeroedElecMod['markers_tail'] -
+                                                                           refitReZeroedElecMod['markers_head']))
         refitReZeroedElecMod['orth'] = np.multiply(self.null(refitReZeroedElecMod['normtraj_vector']),
                                                    (refitReZeroedElecMod['lead_diameter'] / 2))
         refitReZeroedElecMod['markers_x'] = refitReZeroedElecMod['getContactPositions3D'][0, :] + \
