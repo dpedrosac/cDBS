@@ -3,6 +3,7 @@
 
 ---
 folders:
+  default_template: ''
   rootdir: ''
   dicom: ''
   nifti: ''

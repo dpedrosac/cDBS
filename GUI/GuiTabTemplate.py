@@ -2,17 +2,16 @@
 # -*- coding: utf-8 -*-
 
 import os
+
+from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, QMessageBox, \
     QPushButton, QListWidget, QAbstractItemView
 
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
-from GUI.GUIdcm2nii import MainGuiDcm2nii
-from utils.renameNiftiFolders import RenameFolderNames
-from GUI.GuiTwoLists_generic import TwoListGUI
 from dependencies import ROOTDIR
-import private.allToolTips as setToolTips
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging
 
-# TODO: 1.) create ToolTips for the entire script, 2.) Modify contents as needed
+# TODO: 1.) create ToolTips for the entire script, 2.) Modify SST creation with a) warning, b) check for requisites,
+#  and c) creation of shell-script
 
 class GuiTabTemplate(QWidget):
     """General tab which enables import of DICOM files but also a set of distinct options such as viewing the
@@ -48,8 +47,6 @@ class GuiTabTemplate(QWidget):
 
         self.btnChangeWdir = QPushButton('Change working directory')
         self.btnChangeWdir.setDisabled(True)
-        # self.btnChangeWdir.setToolTip(setToolTips.ChangeWdirDICOM())
-        # self.btnChangeWdir.clicked.connect(self.change_wdir)
 
         self.btnReloadFilesTab = QPushButton('Reload files')
         self.btnReloadFilesTab.clicked.connect(self.run_reload_files)
@@ -60,21 +57,21 @@ class GuiTabTemplate(QWidget):
         # ------------------------- Lower left part (Processing)  ------------------------- #
         self.ActionsTab = QGroupBox("Functions")
         self.HBoxLowerLeftTab = QVBoxLayout(self.ActionsTab)
-        self.btn_subj_details = QPushButton('Download further \nTemplates')
-        self.btn_subj_details.setToolTip(setToolTips.subjectDetails())
-        self.btn_subj_details.clicked.connect(self.openDetails)
+        self.btn_new_default = QPushButton('Set new \ndefault')
+        # self.btn_subj_details.setToolTip(setToolTips.subjectDetails()) TODO: new ToolTip needed
+        self.btn_new_default.clicked.connect(self.redefineDefault)
 
-        self.btn_viewer = QPushButton('View available \nTemplate in viewer')
-        self.btn_viewer.setToolTip(setToolTips.displayFolderContent())
-        self.btn_viewer.clicked.connect(self.show_nifti_files)
+        self.btn_viewer = QPushButton('View selected \nTemplate in viewer')
+        # self.btn_viewer.setToolTip(setToolTips.displayFolderContent()) TODO: new ToolTip needed
+        self.btn_viewer.clicked.connect(self.view_template)
 
-        self.btn_renaming = QPushButton('Create Study-specific\ntemplate')
-        self.btn_renaming.setToolTip(setToolTips.renameFolders())
-        self.btn_renaming.clicked.connect(self.run_rename_folders)
+        self.create_SST = QPushButton('Create Study-specific\ntemplate')
+        # self.btn_renaming.setToolTip(setToolTips.renameFolders()) TODO: new ToolTip needed
+        self.create_SST.clicked.connect(self.create_StudySpecificTemplate)
 
         self.HBoxLowerLeftTab.addWidget(self.btn_viewer)
-        self.HBoxLowerLeftTab.addWidget(self.btn_subj_details)
-        self.HBoxLowerLeftTab.addWidget(self.btn_renaming)
+        self.HBoxLowerLeftTab.addWidget(self.btn_new_default)
+        self.HBoxLowerLeftTab.addWidget(self.create_SST)
 
         # -------------------- Right part (Subject list)  ----------------------- #
         self.listbox = QGroupBox('Available subjects')
@@ -82,9 +79,7 @@ class GuiTabTemplate(QWidget):
         self.availableTemplates = QListWidget()
         self.availableTemplates.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.availableTemplates.itemSelectionChanged.connect(self.change_list_item)
-        itemsTab = set([name for name in os.listdir(self.wdirTemplate)
-                        if os.path.isdir(os.path.join(self.wdirTemplate, name))])
-
+        itemsTab = set(FileOperations.list_files_in_folder(self.wdirTemplate))
         self.add_available_templates(self.availableTemplates, itemsTab)
         self.HBoxUpperRightTab.addWidget(self.availableTemplates)
 
@@ -101,27 +96,13 @@ class GuiTabTemplate(QWidget):
         self.lay.addWidget(self.tab)
 
     # ------------------------- Start with the functions for lists and buttons in this tab  ------------------------- #
-    def change_wdir(self):
-        """A new window appears in which the working directory for NIFTI-files can be set; if set, this is stored
-         in the configuration file, so that upon the next start there is the same folder selected automatically"""
-
-        self.niftidir = FileOperations.set_wdir_in_config(self.cfg, foldername='nifti')
-        self.dirTemplates.setText('wDIR: {}'.format(self.niftidir))
-        self.cfg['folders']['nifti'] = self.niftidir
-
-        self.availableTemplates.clear()
-        itemsChanged = FileOperations.list_folders(self.niftidir, self.cfg['folders']['prefix'])
-        self.add_available_templates(self.availableTemplates, itemsChanged)
-
     def run_reload_files(self):
         """Reloads files, e.g. after renaming them"""
 
         self.cfg = Configuration.load_config(self.cfg['folders']['rootdir'])
         self.availableTemplates.clear()
-        itemsChanged = set([name for name in os.listdir(self.wdirTemplate)
-                        if os.path.isdir(os.path.join(self.wdirTemplate, name))])
-        # itemsChanged = FileOperations.list_folders(self.cfg['folders']['nifti'], prefix=self.cfg['folders']['prefix'])
-        self.add_available_templates(self.availableTemplates, itemsChanged)
+        itemsTab = set(FileOperations.list_files_in_folder(self.wdirTemplate))
+        self.add_available_templates(self.availableTemplates, itemsTab)
 
     def change_list_item(self):
         """function intended to provide the item which is selected. As different tabs have a similar functioning, it is
@@ -135,57 +116,54 @@ class GuiTabTemplate(QWidget):
                 self.selected_subj_Gen.append(str(self.availableTemplates.selectedItems()[i].text()))
 
     def add_available_templates(self, sending_list, items, msg="yes"):
-        """adds the available subjects in the working directory into the items list;
+        """adds the available templates in the working directory into the items list;
         an error message is dropped if none available"""
         if len(items) == 0 and msg == "yes":
-            buttonReply = QMessageBox.question(self, "No files in dir", "There are no subjects available "
-                                               "in the current working directory ({}). Do you want to "
-                                               " change to a different one?".format(self.niftidir),
+            buttonReply = QMessageBox.question(self, "No templates in folder", "There are no templates available "
+                                               "in the directory: {}. Please make sure that at least the default "
+                                               "ones are in this directory! Retry?".format(os.path.join(ROOTDIR, 'ext',
+                                                                                                        'templates')),
                                                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if buttonReply == QMessageBox.Yes:
-                self.change_wdir()
+                self.run_reload_files()
         else:
-            items = list(items)
-            sending_list.addItems(items)
+            sending_list.addItems(list(items))
+            myFont = QtGui.QFont()
+            myFont.setItalic(True)
+            out = sending_list.findItems(os.path.basename(self.cfg['folders']['default_template']),
+                                         QtCore.Qt.MatchExactly)
+            out[0].setFont(myFont)
 
-    def openDetails(self):
-        """opens details file which has additional information on subjects """
-        import subprocess
+    def redefineDefault(self):
+        """redefines which template is set as default on the right list and in the cfg-file"""
 
-        fileName = os.path.join(self.cfg['folders']['nifti'], 'subjdetails.csv')
-        if os.path.isfile(fileName):
-            if sys.platform == 'linux':
-                subprocess.Popen(['xdg-open', ''.join(fileName)])
-            else:
-                #['open', ''.join(fileName)] # TODO: implement xdg-open in macos and put the command in the install routine
-                os.system('open"%s"'%fileName)
-                subprocess.run(['open', fileName], check=True)
+        if not self.selected_subj_Gen:
+            Output.msg_box(text="No template selected. Please indicate new default one.", title="No data selected")
+            return
+        elif len(self.selected_subj_Gen) > 1:
+            Output.msg_box(text="Please select only one image as default.", title="Too many templates selected")
+            return
         else:
-            Output.msg_box(text="Subject details are not available!", title="Detail file not found")
+            default_template = [FileOperations.return_full_filename(self.wdirTemplate, x) for x in self.selected_subj_Gen]
+            self.cfg['folders']['default_template'] = default_template[0]
+            Configuration.save_config(ROOTDIR, self.cfg)
 
-    def run_rename_folders(self):
+        self.run_reload_files()
+
+    def create_StudySpecificTemplate(self):
         """Renames all folders with a similar prefix; After that manual reloading is necessary"""
+        print('not yet implemented')
 
-        self.convertFolders = RenameFolderNames()
-        self.convertFolders.show()
-
-    def show_nifti_files(self):
+    def view_template(self):
         """this function opens a list dialog and enables selecting NIFTI files for e.g. check the content (identical
         function as in GUITabPreprocessANTs.py."""
 
         if not self.selected_subj_Gen:
-            Output.msg_box(text="No folder selected. To proceed, please indicate what folder to process.",
-                       title="No subject selected")
-            return
-        elif len(self.selected_subj_Gen) > 1:
-            Output.msg_box(text="Please select only one folder to avoid excessive image load",
-                           title="Number of selected files")
+            Output.msg_box(text="No image selected. Please indicate image(s) to load.", title="No templates selected")
             return
         else:
-            image_folder = os.path.join(self.cfg['folders']['nifti'], self.selected_subj_Gen[0])
-
-        self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui='displayNiftiFiles')
-        self.SelectFiles.show()
+            template_list = [FileOperations.return_full_filename(self.wdirTemplate, x) for x in self.selected_subj_Gen]
+            Imaging.load_imageviewer('itk-snap', template_list)  # to-date, only itk-snap available. could be changed
 
 
 if __name__ == '__main__':

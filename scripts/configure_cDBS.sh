@@ -12,7 +12,7 @@ esac
 echo ${machine}
 
 if [ $machine=Linux ]; then
-packages=("xdg-utils" "ca-certificates") #TODO: are there further requisites
+packages=("xdg-utils" "ca-certificates") #TODO: are there further requisites?
   for pkg in ${packages[@]}; do
 
       is_pkg_installed=$(dpkg-query -W --showformat='${Status}\n' ${pkg} | grep "install ok installed")

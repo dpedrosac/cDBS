@@ -375,6 +375,13 @@ class FileOperations:
         return list_subj
 
     @staticmethod
+    def return_full_filename(inputdir, filename):
+        """returns the entire path if only a filename is known"""
+        filename_complete = glob.glob(inputdir + '/*/{}'.format(filename))
+
+        return filename_complete[0]
+
+    @staticmethod
     def list_files_in_folder(inputdir, contains='', suffix='nii', entire_path=False, subfolders=True):
         """returns a list of files within a folder (including subfolders"""
 
