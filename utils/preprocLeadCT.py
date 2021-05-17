@@ -20,71 +20,80 @@ from sklearn.decomposition import PCA
 
 from dependencies import ROOTDIR
 from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
+from utils.estimateLeadRotation import function_wrapper
+cfg = Configuration.load_config(ROOTDIR)
+
+
+def PaCER_script(subjects, inputfolder=''):
+    """wrapper script for all steps included in the PaCER algorithm"""
+
+    print("\nLead detection of {} subject(s)".format(len(subjects)))
+    inputfolder = cfg['folders']['nifti'] if not inputfolder else inputfolder  # select default input folder
+    LW = LeadWorks()  # load the class including necessary functions
+
+    # Look for data files containing CT imaging including the brainMask and load this into workspace
+    available_files = FileOperations.get_filelist_as_tuple(inputdir=inputfolder, subjects=subjects)
+    regex2lookfor = 'reg_' + 'run[0-9]', 'brainmask_'
+    file_id_CTimaging = [file_tuple for file_tuple in available_files
+                         if re.search(r'\w.({}).'.format(regex2lookfor[0]), file_tuple[0], re.IGNORECASE)
+                         and file_tuple[0].endswith('.nii') and 'CT' in file_tuple[0]]
+
+    file_id_brainMask = [file_tuple for file_tuple in available_files
+                         if re.search(r'\w.({}).'.format(regex2lookfor[1]), file_tuple[0], re.IGNORECASE)
+                         and file_tuple[0].endswith('.nii')]
+
+    if any(t > 2 for t in [len(k) for k in file_id_CTimaging]):
+        print("More than one files for imaging or brainmask available. Please double-check!")
+        return
+
+    if not file_id_brainMask:
+        warnings.warn(message="\tNo brain mask was found, trying to obtain a mask using ANTSpyNET routines")
+        regex2lookforT1 = cfg['preprocess']['normalisation']['prefix'] + 'run'
+        file_id_T1 = [file_tuple for file_tuple in available_files
+                      if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
+                      and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
+        if not file_id_T1:
+            Output.msg_box(text='No T1-sequence imaging available. BrainMask extraction impossible.',
+                           title='T1 sequences missing")')
+            return
+        else:
+            T1imaging = ants.image_read(file_id_T1[0][0])
+            file_id_brainMask = Imaging.create_brainmask(input_folder=inputfolder, subj=''.join(subjects),
+                                                         registered_images=T1imaging)
+            file_id_brainMask = [file_id_brainMask] if type(file_id_brainMask) == tuple else file_id_brainMask
+
+    fileID = list(FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all to single list
+    metal_threshold = int(cfg['lead_detection']['PaCER']['metal_threshold'])
+    elecModels, intensityProfiles, skelSkalms = LW.electrodeEstimation(fileID[0], threshold=metal_threshold)
+
+    sides = ['left', 'right']
+    rotation_default, rotation_mod = [{k: [] for k in sides} for _ in range(2)]
+    for s in sides:
+        rotation_default[s] = function_wrapper(subj=subjects[0], side=s)
+        rotation_mod[s] = Configuration.rotation_dict_mod()  # creates an empty array to save modified data later
+
+    filename_save = os.path.join(os.path.join(inputfolder, subjects[0]), 'elecModels_' + subjects[0] + '.pkl')
+    with open(filename_save, "wb") as f:
+        pickle.dump(elecModels, f)
+        pickle.dump(intensityProfiles, f)
+        pickle.dump(skelSkalms, f)
+        pickle.dump(rotation_default, f)
+        pickle.dump(rotation_mod, f)
+
+    print("Finished with lead detection!")
+    # TODO: it does not return to the empty command line.
+    return
 
 
 class LeadWorks:
-    """Runs the algorithm for lead detection developed by Andreas Husch et al.
+    """Runs algorithm for lead detection developed by Andreas Husch et al.
     see https://www.sciencedirect.com/science/article/pii/S2213158217302450?via%3Dihub
     It includes a three-step process: i) pre-processing, ii) and iii)"""
 
     def __init__(self):
-        self.cfg = Configuration.load_config(ROOTDIR)
         self.verbose = 0
         self.debug = False
         self.PacerEmulation = True
-
-    def PaCER_script(self, subjects, inputfolder=''):
-        """wrapper script for all steps included in the PaCER algorithm"""
-
-        print("\nLead detection of {} subject(s)".format(len(subjects)))
-        inputfolder = self.cfg['folders']['nifti'] if not inputfolder else inputfolder  # select default input folder
-        # inputfolder = self.cfg['folders']['nifti'] # can be deleted if no error is thrown
-
-        # Look for data files containing CT imaging including the brainMask and load this into workspace
-        available_files = FileOperations.get_filelist_as_tuple(inputdir=inputfolder, subjects=subjects)
-        regex2lookfor = 'reg_' + 'run[0-9]', 'brainmask_'
-        file_id_CTimaging = [file_tuple for file_tuple in available_files
-                             if re.search(r'\w.({}).'.format(regex2lookfor[0]), file_tuple[0], re.IGNORECASE)
-                             and file_tuple[0].endswith('.nii') and 'CT' in file_tuple[0]]
-
-        file_id_brainMask = [file_tuple for file_tuple in available_files
-                             if re.search(r'\w.({}).'.format(regex2lookfor[1]), file_tuple[0], re.IGNORECASE)
-                             and file_tuple[0].endswith('.nii')]
-
-        if any(t > 2 for t in [len(k) for k in file_id_CTimaging]):
-            print("More than one files for imaging or brainmask available. Please double-check!")
-            return
-
-        if not file_id_brainMask:
-            warnings.warn(message="\tNo brain mask was found, trying to obtain a mask using ANTSpyNET routines")
-            regex2lookforT1 = self.cfg['preprocess']['normalisation']['prefix'] + 'run'
-            file_id_T1 = [file_tuple for file_tuple in available_files
-                          if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
-                          and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
-            if not file_id_T1:
-                Output.msg_box(text='No T1-sequence imaging available. BrainMask extraction impossible.',
-                               title='T1 sequences missing")')
-                return
-            else:
-                T1imaging = ants.image_read(file_id_T1[0][0])
-                file_id_brainMask = Imaging.create_brainmask(input_folder=inputfolder, subj=''.join(subjects),
-                                                             registered_images=T1imaging)
-                file_id_brainMask = [file_id_brainMask] if type(file_id_brainMask) == tuple else file_id_brainMask
-
-        fileID = list(
-            FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all information to one list
-
-        metal_threshold = int(self.cfg['lead_detection']['PaCER']['metal_threshold'])
-        elecModels, intensityProfiles, skelSkalms = self.electrodeEstimation(fileID[0], threshold=metal_threshold)
-
-        filename_save = os.path.join(os.path.join(inputfolder, subjects[0]), 'elecModels_' + subjects[0] + '.pkl')
-        with open(filename_save, "wb") as f:
-            pickle.dump(elecModels, f)
-            pickle.dump(intensityProfiles, f)
-            pickle.dump(skelSkalms, f)
-
-        print("Finished with lead detection!")
-        # TODO: it does not return to the empty command line.
 
     def electrodeEstimation(self, fileID, threshold=1500):
         """ estimates the electrode mask with a threshold according to:
@@ -98,7 +107,7 @@ class LeadWorks:
             return
         elif max(CTimaging.spacing) > 1:
             warnings.warn("\tSlice thickness > 1mm! Independent contact detection unlikely. Using 'contactAreaCenter'")
-            self.cfg['lead_detection']['PaCER'][
+            cfg['lead_detection']['PaCER'][
                 'detection_method'] = 'contactAreaCenter'  # when spacing too big, this detection method is recommended
         elif max(CTimaging.spacing) > .7:
             warnings.warn("\tSlice thickness > .7mm! Reliable contact detection not guaranteed. For certain "
@@ -177,7 +186,7 @@ class LeadWorks:
             latent = np.sqrt(latent) * 2
             lowerAxesLength = sorted(latent[1:3])
             if (latent[0] >
-                    float(self.cfg['lead_detection']['PaCER']['lambda']) and latent[0] / np.mean(latent[1:3]) > 10
+                    float(cfg['lead_detection']['PaCER']['lambda']) and latent[0] / np.mean(latent[1:3]) > 10
                     and lowerAxesLength[1] / (lowerAxesLength[0] + .001) < 8):
                 detected_leads.append(comp)
 
@@ -257,8 +266,7 @@ class LeadWorks:
                   "caveat: lowering degree!".format(str(len(skeleton)), str(polynomial_ord)))
             polynomial_ord = len(skeleton) - 1
 
-        r3polynomial, tPerMm = self.fitParamPolytoSkeleton(skeleton,
-                                                           degree=polynomial_ord)  # Husch et al. 2015 eq.(1-4)
+        r3polynomial, tPerMm = self.fitParamPolytoSkeleton(skeleton, degree=polynomial_ord)  # Husch etal. 2015 eq.(1-4)
         totalLengthMm = self.polyArcLength3(polyCoeff=r3polynomial)
 
         return r3polynomial, tPerMm, skeleton, totalLengthMm
@@ -283,7 +291,7 @@ class LeadWorks:
         print("\n\tSecond run:")
         R3polynomial2nd, _ = self.fitParamPolytoSkeleton(np.array(skeleton2nd), degree=8)
 
-        msg2plot = "\tRefitting parametrised polynomial to re-sampled data (2nd run)"
+        msg2plot = "\t\tRefitting parametrised polynomial to re-sampled data (2nd run)"
         skeleton3rd, medIntensity, orthIntensVol, _, skelScaleMm = self.oor(R3polynomial2nd, STEP_SIZE, XGrid, YGrid,
                                                                             interpolationF, run_information=msg2plot)
         dat1, dat2 = self.polyArcLength3(initialPoly), self.polyArcLength3(R3polynomial2nd)
@@ -299,7 +307,7 @@ class LeadWorks:
         xrayMarkerAreaCenter, xrayMarkerAreaWidth = self.getIntensityPeaks(filteredIntensity, skelScaleMm,
                                                                            filterIdxs)
 
-        detection_method = self.cfg['lead_detection']['PaCER']['detection_method']
+        detection_method = cfg['lead_detection']['PaCER']['detection_method']
         if detection_method == 'peakWaveCenters':
             contact_pos = peakWaveCenters
         else:
@@ -319,7 +327,7 @@ class LeadWorks:
             lead_geometries = spio.loadmat(os.path.join(ROOTDIR, 'ext', 'PaCER', 'electrodeGeometries.mat'),
                                            squeeze_me=True, simplify_cells=True)
             lead_geometries = lead_geometries['electrodeGeometries']
-            lead_type = self.cfg['lead_detection']['PaCER']['lead_type']
+            lead_type = cfg['lead_detection']['PaCER']['lead_type']
 
             if lead_type == 'unknown':
                 warnings.warn("\t\tNo lead specification provided, please set lead_type if possible. Meanwhile trying"
@@ -467,7 +475,7 @@ class LeadWorks:
 
             intensities = interpolationF.__call__(orthogonalSamplePoints.T)
             intensitiesNanZero = np.where(np.isnan(np.copy(intensities)), 0, intensities)
-            intensitiesNanZero[intensitiesNanZero < float(self.cfg['lead_detection']['PaCER']['snr_threshold'])] = 0
+            intensitiesNanZero[intensitiesNanZero < float(cfg['lead_detection']['PaCER']['snr_threshold'])] = 0
 
             with np.errstate(divide='ignore', invalid='ignore'):
                 skelPoint = orthogonalSamplePoints @ intensitiesNanZero / sum(intensitiesNanZero)
@@ -616,7 +624,7 @@ class LeadWorks:
 
         if np.all(np.isinf(distances)):
             warnings.warn("\t\tCould NOT detect electrode type, thus contact detection might be flawed "
-                          "(Low image resolution? Large slice thickness!?) Set electrode type manually to continue with data")
+                          "(Image resolution? slice thickness!?) Set electrode type manually to continue with data")
             elecStruct = electrodeGeometries[-1]
 
             return elecStruct, rms

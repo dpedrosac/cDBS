@@ -185,7 +185,7 @@ class GuiTabDetectLeads(QWidget):
                   "{}".format(''.join(' -> {}\n'.format(c) for c in self.selected_subj_ANT))
             ret = QMessageBox.question(self, 'MessageBox', msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
             if ret == QMessageBox.Yes:
-                LeadDetectionRoutines.LeadWorks().PaCER_script(subjects=self.selected_subj_ANT)
+                LeadDetectionRoutines.PaCER_script(subjects=self.selected_subj_ANT)
 
     def run_ManualCorrection(self):
         """wrapper which starts the plotting routine for the detected lead which enables manual corrections"""
