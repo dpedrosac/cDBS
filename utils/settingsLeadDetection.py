@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-import yaml
 import os
-import utils.HelperFunctions as HF
-import private.allToolTips as setToolTips
+import sys
+
+import yaml
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QWidget, QApplication, QLabel, QGroupBox, QVBoxLayout, QHBoxLayout, \
     QPushButton, QButtonGroup, QRadioButton, QLineEdit, QMessageBox, QComboBox
+
+import private.allToolTips as setToolTips
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
 from dependencies import ROOTDIR
 
 
@@ -19,7 +21,7 @@ class GuiLeadDetection(QWidget):
         super(GuiLeadDetection, self).__init__(parent=None)
 
         # Load configuration files and general settings
-        self.cfg = HF.LittleHelpers.load_config(ROOTDIR)
+        self.cfg = Configuration.load_config(ROOTDIR)
 
         # General appearance of the GUI
         self.setFixedSize(800, 600)
@@ -223,7 +225,7 @@ class GuiLeadDetection(QWidget):
         self.cfg["lead_detection"]["PaCER"]["snr_threshold"] = self.lineEditSNRThreshold.text()
         self.cfg["lead_detection"]["PaCER"]["lambda"] = int(self.lineEditLambda.text())
 
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        Configuration.save_config(ROOTDIR, self.cfg)
         event.accept()
 
     def load_default_settings(self):
@@ -261,7 +263,7 @@ class GuiLeadDetection(QWidget):
     @QtCore.pyqtSlot()
     def comboChangedDetectionMethod(self):
         self.cfg["lead_detection"]["PaCER"]["detection_method"] = self.lineDetectionMethod.currentText()
-        HF.LittleHelpers.save_config(ROOTDIR, self.cfg)
+        Configuration.save_config(ROOTDIR, self.cfg)
 
     @QtCore.pyqtSlot()
     def comboChangedLeadType(self):

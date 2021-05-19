@@ -15,7 +15,7 @@ lead_detection:
     metal_threshold: '800'
     probabilistic_mask: 'yes'
     snr_threshold: '1500'
-    transformation_matrix: 'yes'
+    transformation_matrix: 'no'
   metdata: patients.xlsx
 preprocess:
   ANTsN4:

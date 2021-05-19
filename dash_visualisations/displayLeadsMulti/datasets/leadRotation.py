@@ -11,7 +11,7 @@ import ants
 import numpy as np
 import scipy
 
-from utils.HelperFunctions import Configuration, LeadWorks
+from utils.HelperFunctions import Configuration, LeadProperties
 from dependencies import ROOTDIR, lead_settings
 cfg = Configuration.load_config(ROOTDIR)
 
@@ -57,8 +57,8 @@ class PrepareData:
             print("\n\t...Lead data not found, please make sure it is available")
             return
 
-        lead_data_raw, iP, sS = LeadWorks.load_leadModel(input_folder, filename_leadmodel)
-        lead_data, sS, iP, sides = LeadWorks.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
+        lead_data_raw, iP, sS = LeadProperties.load_leadModel(input_folder, filename_leadmodel)
+        lead_data, sS, iP, sides = LeadProperties.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
         single_lead = lead_data[side]
 
         if lead_data[side]['model'] not in ('Boston Vercise Directional', 'St Jude 6172', 'St Jude 6173'):
@@ -262,8 +262,8 @@ class PrepareData:
             print("\n\t...Lead data not found, please make sure it is available")
             return
 
-        lead_data_raw, iP, sS = LeadWorks.load_leadModel(input_folder, filename_leadmodel)
-        lead_data, sS, iP, sides = LeadWorks.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
+        lead_data_raw, iP, sS = LeadProperties.load_leadModel(input_folder, filename_leadmodel)
+        lead_data, sS, iP, sides = LeadProperties.estimate_hemisphere(lead_data_raw, sS, iP)  # determines side
         single_lead = lead_data[side]
 
         if lead_data[side]['model'] not in ('Boston Vercise Directional', 'St Jude 6172', 'St Jude 6173'):
@@ -384,8 +384,8 @@ class GetAllData:
         marker_origCT = dict()  # next part inconsistent to orientation from ea_main_orient (cf. lines 108ff.)!!
         for marker, coordinates in estimated_markers.items():
             coords_temp = [int(round(c)) for c in coordinates]
-            transformed = LeadWorks.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
-                                                          to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
+            transformed = LeadProperties.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
+                                                               to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
             marker_origCT[marker] = np.array(transformed['points'])  # use points to account for distances
 
         UnitVector_origCT = np.divide((marker_origCT['markers_tail'] - marker_origCT['markers_head']),
@@ -436,8 +436,8 @@ class GetAllData:
         marker_origCT = dict()  # next part inconsistent to orientation from ea_main_orient (cf. lines 108ff.)!!
         for marker, coordinates in estimated_markers.items():
             coords_temp = [int(round(c)) for c in coordinates]
-            transformed = LeadWorks.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
-                                                          to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
+            transformed = LeadProperties.transform_coordinates(coords_temp, from_imaging=CTimaging_trans,
+                                                               to_imaging=CTimaging_orig, file_invMatrix=file_invMatrix)
             marker_origCT[marker] = np.array(transformed['points'])  # use points to account for distances
 
         UnitVector_origCT = np.divide((marker_origCT['markers_tail'] - marker_origCT['markers_head']),
@@ -484,7 +484,7 @@ class GetAllData:
 
         fitvolume_orig = np.array([meshX.flatten(), meshY.flatten(), meshZ.flatten(), np.ones(meshX.flatten().shape)])
         fitvolume = np.linalg.solve(transformation_matrix, fitvolume_orig)
-        resampled_points = LeadWorks.interpolate_CTintensities(fitvolume, imaging, method='polygon')
+        resampled_points = LeadProperties.interpolate_CTintensities(fitvolume, imaging, method='polygon')
         imat = np.reshape(resampled_points, (meshX.shape[0], -1), order='F')
 
         return imat, bounding_box, fitvolume

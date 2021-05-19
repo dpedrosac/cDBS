@@ -439,7 +439,7 @@ class FileOperations:
         return selected_directory
 
 
-class LeadWorks:
+class LeadProperties:
     def __init__(self, _debug=False):
         self.debug = _debug
 

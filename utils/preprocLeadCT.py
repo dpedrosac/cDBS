@@ -19,7 +19,8 @@ from skimage.measure import regionprops
 from sklearn.decomposition import PCA
 
 from dependencies import ROOTDIR
-from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent
+from utils.HelperFunctions import Output, Configuration, FileOperations, Imaging, MatlabEquivalent, LeadProperties
+
 from utils.estimateLeadRotation import function_wrapper
 cfg = Configuration.load_config(ROOTDIR)
 
@@ -65,6 +66,14 @@ def PaCER_script(subjects, inputfolder=''):
     fileID = list(FileOperations.inner_join(file_id_brainMask, file_id_CTimaging))  # joins all to single list
     metal_threshold = int(cfg['lead_detection']['PaCER']['metal_threshold'])
     elecModels, intensityProfiles, skelSkalms = LW.electrodeEstimation(fileID[0], threshold=metal_threshold)
+    elecModels, skelSkalms, intensityProfiles, _ = \
+        LeadProperties.estimate_hemisphere(elecModels, intensityProfiles, skelSkalms)  # returns hemisphere from coords.
+
+    filename_save = os.path.join(os.path.join(inputfolder, subjects[0]), 'elecModels_' + subjects[0] + '.pkl')
+    with open(filename_save, "wb") as f:
+        pickle.dump(elecModels, f)
+        pickle.dump(intensityProfiles, f)
+        pickle.dump(skelSkalms, f)
 
     sides = ['left', 'right']
     rotation_default, rotation_mod = [{k: [] for k in sides} for _ in range(2)]
@@ -72,11 +81,8 @@ def PaCER_script(subjects, inputfolder=''):
         rotation_default[s] = function_wrapper(subj=subjects[0], side=s)
         rotation_mod[s] = Configuration.rotation_dict_mod()  # creates an empty array to save modified data later
 
-    filename_save = os.path.join(os.path.join(inputfolder, subjects[0]), 'elecModels_' + subjects[0] + '.pkl')
+    filename_save = os.path.join(os.path.join(inputfolder, subjects[0]), 'rotation_' + subjects[0] + '.pkl')
     with open(filename_save, "wb") as f:
-        pickle.dump(elecModels, f)
-        pickle.dump(intensityProfiles, f)
-        pickle.dump(skelSkalms, f)
         pickle.dump(rotation_default, f)
         pickle.dump(rotation_mod, f)
 
