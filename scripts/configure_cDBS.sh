@@ -77,7 +77,6 @@ if [[ ! -d ./NIFTI ]]; then
 fi
 )
 
-
 # copy blank version of the configuration file
 cp ./private/config_imagingTBdef.yaml config_imagingTB.yaml
 
