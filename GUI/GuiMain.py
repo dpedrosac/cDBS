@@ -19,7 +19,7 @@ class cDBSMain(QMainWindow):
 
     def __init__(self, _debug=False):
         super().__init__()
-        self.setFixedSize(800, 600)
+        #self.setFixedSize(800, 600)
         self.setWindowTitle('Imaging processing pipeline for patients who underwent DBS surgery')
         self.table_widget = TabContent(self)
         self.setCentralWidget(self.table_widget)

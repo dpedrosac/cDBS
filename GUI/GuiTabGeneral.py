@@ -188,7 +188,8 @@ class GuiTabGeneral(QWidget):
         self.SelectFiles = TwoListGUI(working_directory=image_folder, option_gui='displayNiftiFiles')
         self.SelectFiles.show()
 
-    def run_DCM2NII(self):
+    @staticmethod
+    def run_DCM2NII():
         """wrapper to start the GUI which enables to batch preprocess DICOM dolers and convert them to NIFTI files"""
 
         # self.convertFiles = MainGuiDcm2nii() # 2021/02/23 not sure if this works without reference to GUI

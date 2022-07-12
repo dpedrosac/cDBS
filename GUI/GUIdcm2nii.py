@@ -22,7 +22,7 @@ class MainGuiDcm2nii(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(900, 600)
+        #self.setFixedSize(900, 600)
         self.setWindowTitle('Batch convert DICOM files to NIFTI using dcm2niix ')
         self.table_widget = ContentGuiDCM2Nii(self)
         self.setCentralWidget(self.table_widget)

@@ -132,7 +132,10 @@ class GuiTabTemplate(QWidget):
             myFont.setItalic(True)
             out = sending_list.findItems(os.path.basename(self.cfg['folders']['default_template']),
                                          QtCore.Qt.MatchExactly)
-            out[0].setFont(myFont)
+            try:
+                out[0].setFont(myFont)
+            except IndexError:
+                return
 
     def redefineDefault(self):
         """redefines which template is set as default on the right list and in the cfg-file"""

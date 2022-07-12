@@ -25,7 +25,7 @@ class GuiSettingsNiftiAnts(QWidget):
         self.cfg = Configuration.load_config(ROOTDIR)
 
         # General appearance of the GUI
-        self.setFixedSize(800, 600)
+        # self.setFixedSize(800, 600)
         self.setWindowTitle('Settings for working with NIFTI files and ANTs Toolbox')
         self.show()
 
@@ -86,17 +86,16 @@ class GuiSettingsNiftiAnts(QWidget):
         lay4.addWidget(self.lineEditBSplineDist)
         lay4.addStretch()
 
-        width = 31.33
         self.labelConv = QLabel('Convergence?\t\t')
         self.labelConv.setToolTip(setToolTips.N4BiasConvergence())
         self.lineEditConv1 = QLineEdit()
-        self.lineEditConv1.setFixedWidth(width)
+        self.lineEditConv1.setFixedWidth(int(32))
         self.lineEditConv2 = QLineEdit()
-        self.lineEditConv2.setFixedWidth(width)
+        self.lineEditConv2.setFixedWidth(int(32))
         self.lineEditConv3 = QLineEdit()
-        self.lineEditConv3.setFixedWidth(width)
+        self.lineEditConv3.setFixedWidth(int(32))
         self.lineEditConv4 = QLineEdit()
-        self.lineEditConv4.setFixedWidth(width)
+        self.lineEditConv4.setFixedWidth(int(32))
 
         lay5 = QHBoxLayout()
         lay5.addWidget(self.labelConv)

@@ -217,27 +217,26 @@ class Imaging:
 
     @staticmethod
     def load_imageviewer(path2viewer, file_names, suffix=''):
-        """loads selected NIFTI-files in imageviewer"""
+        """loads selected NIFTI-files in imageviewer, and sets path iff necessary"""
 
         if not file_names:
             Output.msg_box(text="The provided list with NIFTI-files is empty, please double-check",
                            title="No NIFTI-files provided")
             return
+        path2viewer = Imaging.set_viewer(path2viewer)
 
         if sys.platform == ('linux' or 'linux2'):
             if len(file_names) == 1:
-                cmd = ["itksnapse", "-g", file_names[0]]
+                cmd = ['{}'.format(path2viewer), "-g", file_names[0]]
             else:
-                cmd = ["itksnapse", "-g", file_names[0], "-o", *file_names[1:]]
+                cmd = ['{}'.format(path2viewer), "-g", file_names[0], "-o", *file_names[1:]]
         elif sys.platform == 'macos' or sys.platform == 'darwin':
             if len(file_names) == 1:
-                cmd = ["itksnapse", "-g", file_names[0]]
+                cmd = ['{}'.format(path2viewer), "-g", file_names[0]]
             else:
-                cmd = ["itksnapse", "-g", file_names[0], "-o", *file_names[1:]]
+                cmd = ['{}'.format(path2viewer), "-g", file_names[0], "-o", *file_names[1:]]
 
             # TODO: add sudo /Applications/ITK-SNAP.app/Contents/bin/install_cmdl.sh to the setup
-            # TODO: change ITK-SNAP so that it does not freeze the entire script
-            # TODO: remove other viewers apart from itksnapse and options for win systems
 
         if 'ITK-SNAP' in path2viewer or 'snap' in path2viewer:
             p = subprocess.Popen(cmd, shell=False,
@@ -344,7 +343,8 @@ class Imaging:
 
         hd_trajectory = []
         for idx in range(np.array(orig_trajectory).shape[1]):
-            hd_trajectory.append(np.linspace(start=orig_trajectory[0, idx], stop=orig_trajectory[-1, idx], num=resolution))
+            hd_trajectory.append(
+                np.linspace(start=orig_trajectory[0, idx], stop=orig_trajectory[-1, idx], num=resolution))
         return np.stack(hd_trajectory).T
 
 
@@ -426,7 +426,7 @@ class FileOperations:
     def set_wdir_in_config(cfg, foldername, init=False):
         """Generic function setting the working directory (e.g. DICOM, nifti, etc."""
         from PyQt5.QtWidgets import QFileDialog
-        text2display = 'directory of nii-files' if foldername=='nifti' else 'dicom-folder'
+        text2display = 'directory of nii-files' if foldername == 'nifti' else 'dicom-folder'
         cfg['folders'][foldername] = ''
         while cfg['folders'][foldername] == '':
             if init:
@@ -447,7 +447,7 @@ class LeadProperties:
     def get_default_lead(lead_data):
         """obtains default lead properties according to the model proposed in the PaCER algorithm @ ./template"""
 
-        if lead_data['model'] == 'Boston Vercise Directional': # load mat-file to proceed
+        if lead_data['model'] == 'Boston Vercise Directional':  # load mat-file to proceed
             mat_filename = 'boston_vercise_directed.mat'
             lead_model = loadmat(os.path.join(ROOTDIR, 'ext', 'LeadDBS', mat_filename), 'r')['electrode']
             default_positions = {x: np.hstack(vals) for x, vals in lead_model.items() if x.endswith('position')}
@@ -457,7 +457,6 @@ class LeadProperties:
             return
 
         return lead_model, default_positions, default_coordinates
-
 
     @staticmethod
     def load_leadModel(inputdir, filename):
@@ -471,7 +470,7 @@ class LeadProperties:
                            title="Models not available")
             return
         else:
-            with open(filename, "rb") as model: # roughly ea_loadreconstruction in the LeadDBS script
+            with open(filename, "rb") as model:  # roughly ea_loadreconstruction in the LeadDBS script
                 lead_models = pickle.load(model)
                 intensityProfiles = pickle.load(model)
                 skelSkalms = pickle.load(model)
@@ -527,7 +526,6 @@ class LeadProperties:
 
         return transformed
 
-
     @staticmethod
     def interpolate_CTintensities(points2interpolate, filenameImaging, method='linear'):
         import SimpleITK as sitk
@@ -555,7 +553,7 @@ class LeadProperties:
             interpolator_enum = sitk.sitkLinear
         elif method == 'polygon':
             interpolator_enum = sitk.sitkLinear
-#            interpolator_enum = sitk.sitkPolygon3
+        #            interpolator_enum = sitk.sitkPolygon3
         else:
             warnings.warn(message="Unknown interpolation method. Please check sitk package for options")
             return
@@ -566,7 +564,7 @@ class LeadProperties:
                                        interpolator_enum, default_output_pixel_value, output_pixel_type)
 
         resampled_points = [resampled_temp[x, 0, 0] for x in range(resampled_temp.GetWidth())]
-        debug = False # only necessary to see whether results are meaningful
+        debug = False  # only necessary to see whether results are meaningful
         if debug:
             for i in range(resampled_temp.GetWidth()):
                 print(str(img.TransformPhysicalPointToContinuousIndex(physical_points[i])) + ': ' + str(
@@ -604,22 +602,26 @@ class FileLocation:
     def itk_snap_check(rootdir=''):
         """checks for common folders in different platforms in which ITK-snap may be saved. """
 
-        rootdir = ROOTDIR if not rootdir else rootdir
-        platform = sys.platform
-        cfg = Configuration.load_config(ROOTDIR)         # TODO: include the version stored in dependencies.py
+        cfg = Configuration.load_config(ROOTDIR)
+        folder = ''
         if not cfg['folders']['path2itksnap']:
-            if platform == 'linux':
-                default_folders = ["/etc/bin/", "/usr/lib/snap-3.6.0", "/usr/lib/snap-3.6.0/ITK-SNAP",
-                                   os.path.join(rootdir, 'ext', 'snap-3.6.0')]
-            elif platform == 'macos' or platform == 'darwin':
-                default_folders = ['/Applications/ITK-SNAP.app/']
+            if sys.platform == 'linux':
+                default_dirs = ["/etc/bin/", "/usr/lib/snap-3.6.0", "/usr/lib/snap-3.6.0/ITK-SNAP",
+                                "/opt/itksnap/bin/", os.path.join(ROOTDIR, 'ext', 'snap-3.6.0')]
+            elif sys.platform == 'macos' or sys.platform == 'darwin':
+                default_dirs = ['/Applications/ITK-SNAP.app/']
 
             try:
-                folder = [folder_id for folder_id in default_folders if os.path.isfile(os.path.join(folder_id, "ITK-SNAP"))]
+                folder = [folder_id for folder_id in default_dirs if os.path.isfile(os.path.join(folder_id, "itksnap"))]
+                folder = folder[0] + 'itksnap'
             except KeyError:
-                folder = QFileDialog.getExistingDirectory('Please indicate location of ITK-SNAP.')
+                pass
+
+            if not folder:
+                folder = QFileDialog.getExistingDirectory(caption='Please indicate location of ITK-SNAP.')
+                folder = folder + '/itksnap'
         else:
             folder = cfg['folders']['path2itksnap']
         # Here a dialog is needed in case folder has many flags to folders with itk-snap
 
-        return folder[0]
+        return folder

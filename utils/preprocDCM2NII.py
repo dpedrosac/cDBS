@@ -115,7 +115,7 @@ class PreprocessDCM:
                                  '-w', str(self.cfg['preprocess']['dcm2nii']['NameConflicts']),
                                  '-v', str(self.cfg['preprocess']['dcm2nii']['Verbosity']),
                                  '-x', str(self.cfg['preprocess']['dcm2nii']['ReorientCrop']),
-                                 folder],
+                                 os.path.join(input_folder_name, folder)],
                                 stdout=sys.stdout, stderr=subprocess.STDOUT)
 
             sys.stdout.close()
@@ -152,7 +152,7 @@ class PreprocessDCM:
             dtemp['folder'].append(self.cfg['folders']['prefix'] + str(idx))
 
         df_new = pds.DataFrame(dtemp, columns=['name', 'folder'])
-        df_save = df_save.append(df_new)
+        df_save = pds.concat([df_save, df_new])
         df_save.reset_index(drop=True)
         df_save.to_csv(subjlist_filename, index=True, header=True, sep='\t')
 

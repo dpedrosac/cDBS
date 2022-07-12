@@ -22,7 +22,7 @@ class GuiSettingsDCM2NII(QWidget):
         self.cfg = Configuration.load_config(ROOTDIR)
 
         # General appearance of the GUI
-        self.setFixedSize(600, 400)
+        # self.setFixedSize(600, 400)
         self.setWindowTitle('Settings for converting DICOM to NIFTI files')
         self.show()
 

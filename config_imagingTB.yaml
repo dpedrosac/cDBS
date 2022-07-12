@@ -1,57 +1,53 @@
-# Config file saving all important settings that have been set; A recovery to default mode is possible
-%YAML 1.1
-
 ---
 folders:
-  default_template: ''
-  rootdir: ''
-  dicom: ''
-  nifti: ''
+  default_template: /media/storage/cDBS/ext/templates/mni_icbm152_nlin_asym_09b/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii
+  dicom: /media/storage/cDBS/data/DICOM
+  nifti: /media/storage/cDBS/data/NIFTI
+  path2itksnap: /opt/itksnap/bin/itksnap
   path2slicer: ''
-  path2itksnap: ''
   prefix: subj
+  rootdir: /media/storage/cDBS
+lead_detection:
+  PaCER:
+    detection_method: contactAreaCenter
+    lambda: '25'
+    lead_type: Boston Vercise Directional
+    metal_threshold: '800'
+    probabilistic_mask: 'yes'
+    snr_threshold: '1500'
+    transformation_matrix: 'no'
+  metdata: patients.xlsx
 preprocess:
-  dcm2nii:
-      BIDSsidecar: 'yes'
-      OutputCompression: 'no'
-      OutputFileStruct: '%p_%d'
-      NameConflicts: 2
-      Verbosity: 1
-      IncludeFiles: "T1_,T2_,ep2d_,H30,~SW[)],~12cha"
-      ReorientCrop: 'no'
   ANTsN4:
-      prefix: 'bc_'
-      denoise: 'no'
-      shrink-factor: 4
-      bspline-fitting: 200
-      convergence:
-        - 50
-        - 50
-        - 50
-        - 50
-      threshold: 1e-7
-      dti_prefix: 'ep2d'
+    bspline-fitting: 200
+    convergence:
+    - 50
+    - 50
+    - 50
+    - 50
+    denoise: 'no'
+    dti_prefix: ep2d
+    prefix: bc_
+    shrink-factor: 4
+    threshold: 1.0e-07
+  dcm2nii:
+    BIDSsidecar: 'yes'
+    IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
+    NameConflicts: 2
+    OutputCompression: 'no'
+    OutputFileStruct: '%p_%d'
+    ReorientCrop: 'no'
+    Verbosity: 1
+  normalisation:
+    sequences: T1_,T2_,PD_
+    template_image: mni_icbm152_nlin_asym_09b
   registration:
+    custom_registration_file: cmdline_ANTsRegistration.txt
     default_registration: 'yes'
-    registration_method: 'SyNRA'
     metric:
     - mattes
     - GC
     prefix: reg_
+    registration_method: SyNRA
     resample_method: '0'
     resample_spacing: '0.7'
-    custom_registration_file: 'cmdline_ANTsRegistration.txt'
-  normalisation:
-    template_image: mni_icbm152_nlin_asym_09b
-    sequences: 'T1_,T2_,PD_'
-lead_detection:
-  PaCER:
-    metal_threshold: '800'
-    snr_threshold: '1500'
-    lambda: '25'
-    probabilistic_mask: 'yes'
-    detection_method: 'contactAreaCenter'
-    lead_type: 'Boston Vercise Directional'
-    transformation_matrix: 'no'
-
-  metdata: "patients.xlsx"

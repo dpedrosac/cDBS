@@ -63,8 +63,8 @@ fi
 if [[ ! -d ./templates/mni_icbm152_nlin_asym_09b ]]; then
     mkdir ./templates/mni_icbm152_nlin_asym_09b
     wget "http://www.bic.mni.mcgill.ca/~vfonov/icbm/2009/mni_icbm152_nlin_asym_09b_nifti.zip" -O temp.zip
-    unzip -o temp.zip -d /templates/mni_icbm152_nlin_asym_09b/
-    rm -rf temp.zip
+    unzip -o ./temp.zip -d ./templates/
+    # rm -rf temp.zip
 fi
 )
 
