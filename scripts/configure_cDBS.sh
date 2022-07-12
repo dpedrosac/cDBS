@@ -9,19 +9,18 @@ case "${unameOut}" in
     MINGW*)     machine=MinGw;;
     *)          machine="UNKNOWN:${unameOut}"
 esac
-echo ${machine}
+echo "${machine}"
 
 if [ "$machine" = Linux ]; then
 packages=("xdg-utils" "ca-certificates") #TODO: are there further requisites?
   for pkg in ${packages[@]}; do
 
-      is_pkg_installed=$(dpkg-query -W --showformat='${Status}\n' ${pkg} | grep "install ok installed")
+      is_pkg_installed=$(dpkg-query -W --showformat='${Status}\n' "${pkg}" | grep "install ok installed")
 
       if [ "${is_pkg_installed}" == "install ok installed" ]; then
-          echo ${pkg} is installed.
+          echo "${pkg}" is installed.
       fi
   done
-  apt-get -qq update && apt-get -qq --yes --force-yes install itksnap # TODO: maybe not working b/c of lacking root priv.
 
 elif [ "$machine" = Darwin ]; then
   # Check to see if Homebrew is installed, and install it if it is not
@@ -36,11 +35,19 @@ else
   exit
 fi
 
-# TODO: should ITK-snap be included here?
+if [[ ! -d ./ext/itksnap ]]; then
+    mkdir ./ext/itksnap
+    wget "https://sourceforge.net/projects/itk-snap/files/itk-snap/3.6.0/itksnap-3.6.0-20170401-Linux-x86_64.tar.gz/" -O itksnap-3.6.0-20170401-Linux-x86_64.tar.gz
+    mv itksnap-3.6.0-20170401-Linux-x86_64.tar.gz ./ext/itksnap/
+fi
 
 # ==============================    create general architecture of folders    ==============================
 
-(if [[ ! -d ./logs ]]; then
+(if [[ ! -d ./data ]]; then
+    mkdir ./data
+fi
+
+if [[ ! -d ./logs ]]; then
     mkdir ./logs
 fi
 
@@ -53,19 +60,18 @@ if [[ ! -d ./templates ]]; then
     mkdir ./templates
 fi
 
-if [[ ! -d ./ext/templates/mni_icbm152_nlin_asym_09b ]]; then
-    mkdir ./ext/templates/mni_icbm152_nlin_asym_09b
+if [[ ! -d ./templates/mni_icbm152_nlin_asym_09b ]]; then
+    mkdir ./templates/mni_icbm152_nlin_asym_09b
+    wget "http://www.bic.mni.mcgill.ca/~vfonov/icbm/2009/mni_icbm152_nlin_asym_09b_nifti.zip" -O temp.zip
+    unzip -o temp.zip -d /templates/mni_icbm152_nlin_asym_09b/
+    rm -rf temp.zip
 fi
-
-wget "http://www.bic.mni.mcgill.ca/~vfonov/icbm/2009/mni_icbm152_nlin_asym_09b_minc2.zip" -O temp.zip
-unzip -o temp.zip -d ./ext/template/mni_icbm152_nlin_asym_09b
-rm -rf temp.zip
-rm -rf COPYING
-
 )
 
 # ==============================    create subfolders in data folder    ==============================
-(cd data
+(
+cd data
+
 # create the relevant folders for data storage
 if [[ ! -d ./DICOM ]]; then
     mkdir ./DICOM

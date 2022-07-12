@@ -226,18 +226,18 @@ class Imaging:
 
         if sys.platform == ('linux' or 'linux2'):
             if len(file_names) == 1:
-                cmd = ["itksnap", "-g", file_names[0]]
+                cmd = ["itksnapse", "-g", file_names[0]]
             else:
-                cmd = ["itksnap", "-g", file_names[0], "-o", *file_names[1:]]
+                cmd = ["itksnapse", "-g", file_names[0], "-o", *file_names[1:]]
         elif sys.platform == 'macos' or sys.platform == 'darwin':
             if len(file_names) == 1:
-                cmd = ["itksnap", "-g", file_names[0]]
+                cmd = ["itksnapse", "-g", file_names[0]]
             else:
-                cmd = ["itksnap", "-g", file_names[0], "-o", *file_names[1:]]
+                cmd = ["itksnapse", "-g", file_names[0], "-o", *file_names[1:]]
 
             # TODO: add sudo /Applications/ITK-SNAP.app/Contents/bin/install_cmdl.sh to the setup
             # TODO: change ITK-SNAP so that it does not freeze the entire script
-            # TODO: remove other viewers apart from itksnap and options for win systems
+            # TODO: remove other viewers apart from itksnapse and options for win systems
 
         if 'ITK-SNAP' in path2viewer or 'snap' in path2viewer:
             p = subprocess.Popen(cmd, shell=False,
