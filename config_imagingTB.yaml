@@ -1,16 +1,16 @@
 ---
 folders:
-  default_template: /media/storage/cDBS/ext/templates/mni_icbm152_nlin_asym_09b/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii
-  dicom: /media/storage/cDBS/data/DICOM
+  default_template: ''
+  dicom: ''
   nifti: /media/storage/cDBS/data/NIFTI
-  path2itksnap: ''
+  path2itksnap: /opt/itksnap/bin/itksnap
   path2slicer: ''
   prefix: subj
   rootdir: /media/storage/cDBS
 lead_detection:
   PaCER:
     detection_method: contactAreaCenter
-    lambda: 25
+    lambda: '25'
     lead_type: Boston Vercise Directional
     metal_threshold: '800'
     probabilistic_mask: 'yes'
@@ -29,7 +29,7 @@ preprocess:
     dti_prefix: ep2d
     prefix: bc_
     shrink-factor: 4
-    threshold: 1.0e-07
+    threshold: 1e-7
   dcm2nii:
     BIDSsidecar: 'yes'
     IncludeFiles: T1_,T2_,ep2d_,H30,~SW[)],~12cha
@@ -39,7 +39,6 @@ preprocess:
     ReorientCrop: 'no'
     Verbosity: 1
   normalisation:
-    prefix: ''
     sequences: T1_,T2_,PD_
     template_image: mni_icbm152_nlin_asym_09b
   registration:
