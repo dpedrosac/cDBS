@@ -319,9 +319,9 @@ class Imaging:
     def create_brainmask(input_folder, subj, registered_images):
         """this function import antspynet in order to obtain a probabilistic brain mask for the T1 imaging"""
         import ants, antspynet
-        filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii')
+        filename_brainmask = os.path.join(input_folder, 'brainmask_T1.nii') #TODO needs to be adapted as saved into ./data/NIFTI and not ./data/NIFTI/subjxx
 
-        brainmask = antspynet.brain_extraction(image=registered_images, verbose=False)
+        brainmask = antspynet.brain_extraction(image=registered_images, modality='t1', verbose=True)
         ants.image_write(image=brainmask, filename=filename_brainmask)
 
         return (filename_brainmask, subj)
@@ -599,7 +599,7 @@ class FileLocation:
     providing default locations in which the program can be searched to avoid manual selection"""
 
     @staticmethod
-    def itk_snap_check(rootdir=''):
+    def itk_snap_check():
         """checks for common folders in different platforms in which ITK-snap may be saved. """
 
         cfg = Configuration.load_config(ROOTDIR)

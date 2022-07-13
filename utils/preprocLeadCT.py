@@ -47,9 +47,9 @@ def PaCER_script(subjects, inputfolder=''):
         print("More than one files for imaging or brainmask available. Please double-check!")
         return
 
-    if not file_id_brainMask:
+    if not file_id_brainMask: # creates brain mask in case there is none
         warnings.warn(message="\tNo brain mask was found, trying to obtain a mask using ANTSpyNET routines")
-        regex2lookforT1 = cfg['preprocess']['normalisation']['prefix'] + 'run'
+        regex2lookforT1 = cfg['preprocess']['registration']['prefix'] + 'run'
         file_id_T1 = [file_tuple for file_tuple in available_files
                       if re.search(r'\w.({}).'.format(regex2lookforT1), file_tuple[0], re.IGNORECASE)
                       and 't1' in file_tuple[0] and file_tuple[0].endswith('.nii')]
